@@ -278,7 +278,12 @@
         log(s, `${was.name}が完治した！`, 'good');
         if (was.wasFirst && p.squad === 'second' && p.trust >= 40 && phase === 'season') {
           p.squad = 'first';
-          log(s, '1軍に復帰した！', 'good');
+          const u = G.ensureUsage(s);
+          u.status = 'bench';
+          u.slot = null;
+          u.benchGames = 0;
+          u.form = [];
+          log(s, `${G.squadName(p, 'first')}に復帰した！（まずは控えから）`, 'good');
         }
       }
     }
@@ -353,88 +358,37 @@
     }
     log(s, `今週のチーム成績：${ww}勝${wl}敗（通算 ${after.w}勝${after.l}敗${after.d}分）`, 'team');
 
-    const ov = G.overall(p);
-    let delta = 0;
+    // 人気（1軍での活躍）と2軍成績のログ
     if (p.squad === 'first' && !p.injury) {
       if (G.isPitcher(p)) {
         const w = r.weekPit;
-        if (w.outs >= 3) {
-          const era = (w.er * 27) / w.outs;
-          delta = G.clamp((3.8 - era) * 1.0, -5, 4) + (G.pitchQuality(p) - 50) * 0.03;
-          p.popularity += w.w * 0.6 + w.s * 0.3 + w.hld * 0.15;
-        } else delta = (G.pitchQuality(p) - 50) * 0.05;
+        p.popularity += w.w * 0.6 + w.s * 0.3 + w.hld * 0.15;
       } else {
         const w = r.weekBat;
-        if (w.pa >= 4) {
-          const d = G.batDerived(w);
-          delta = G.clamp((d.ops - 0.66) * 14, -5, 5) + (ov - 52) * 0.04;
-          p.popularity += w.hr * 0.4 + (d.ops > 0.85 ? 0.5 : 0);
-        } else delta = (ov - 52) * 0.08;
+        if (w.pa >= 4) p.popularity += w.hr * 0.4 + (G.batDerived(w).ops > 0.85 ? 0.5 : 0);
       }
     } else if (p.squad === 'second' && !p.injury) {
       if (G.isPitcher(p)) {
         const w = r.farmPit;
-        if (w.outs >= 3) {
-          const era = (w.er * 27) / w.outs;
-          delta = G.clamp((3.6 - era) * 0.8, -3, 4) + (G.pitchQuality(p) - 42) * 0.06;
-          log(s, `2軍戦：${G.fmtIP(w.outs)}回 ${w.er}自責 ${w.k}奪三振`, 'game');
-        } else delta = (G.pitchQuality(p) - 42) * 0.05;
+        if (w.outs >= 3) log(s, `${G.squadName(p, 'second')}戦：${G.fmtIP(w.outs)}回 ${w.er}自責 ${w.k}奪三振`, 'game');
       } else {
         const w = r.farmBat;
-        if (w.pa >= 4) {
-          const d = G.batDerived(w);
-          delta = G.clamp((d.ops - 0.72) * 12, -3, 5) + (ov - 42) * 0.08;
-          log(s, `2軍戦：${w.ab}打数${w.h}安打 ${w.hr}本塁打 ${w.rbi}打点`, 'game');
-        } else delta = (ov - 42) * 0.05;
+        if (w.pa >= 4) log(s, `${G.squadName(p, 'second')}戦：${w.ab}打数${w.h}安打 ${w.hr}本塁打 ${w.rbi}打点`, 'game');
       }
     }
-    p.trust = G.clamp(p.trust + delta, 0, 100);
     p.popularity = G.clamp(p.popularity, 0, 100);
 
     // 試合による疲労
     if (p.squad === 'first' && !p.injury) {
-      const tired = G.isPitcher(p) ? (p.role === 'SP' ? 8 : 6) : p.trust >= 55 ? 7 : 3;
+      const tired = G.isPitcher(p) ? (p.role === 'SP' ? 8 : 6) : G.ensureUsage(s).status === 'starter' ? 7 : 3;
       p.stamina = G.clamp(p.stamina - tired, 0, 100);
     } else if (!p.injury) p.stamina = G.clamp(p.stamina - 3, 0, 100);
 
-    // 昇格・降格
-    if (!p.injury && p.squad === 'second' && p.trust >= 65 && ov >= 38 && s.week < G.SEASON_END) {
-      p.squad = 'first';
-      p.trust = Math.max(p.trust - 15, 45);
-      if (G.isPitcher(p)) G.assignRole(s);
-      const first = !s.flags.firstPromotion;
-      s.flags.firstPromotion = true;
-      const up = G.squadName(p, 'first');
-      scene(s, `${up}昇格！`, first ? `監督「${p.name}、明日から${up}だ。思い切ってやってこい！」\n\nついに念願の${up}昇格！` : `再び${up}に呼ばれた！今度こそ結果を残すぞ！`, { big: `${up}昇格` });
-      log(s, `${up}に昇格した！`, 'good');
-      if (first) s.history.push({ year: s.year, text: '初の1軍昇格' });
-    } else if (p.squad === 'first' && p.trust < 25) {
-      p.squad = 'second';
-      p.trust = 35;
-      const down = G.squadName(p, 'second');
-      scene(s, `${down}降格`, `監督「しばらく${down}で調整してこい」\n\n悔しいが、${down}で鍛え直そう…。`);
-      log(s, `${down}に降格した…`, 'bad');
-    }
-
-    // 投手の役割見直し
-    if (G.isPitcher(p) && p.squad === 'first' && (s.week - G.SEASON_START) % 6 === 5) {
-      const before = p.role;
-      G.assignRole(s);
-      if (before !== p.role) {
-        scene(s, '配置転換', `首脳陣の判断で、${G.roleName(p)}に配置転換となった。`);
-        log(s, `${G.roleName(p)}に配置転換`, 'event');
-      }
-    }
+    // 2軍からの昇格判断（1軍での起用は試合ごとに match.js → manager.js で判断）
+    G.farmPromotionCheck(s);
+    G.refreshTrust(s);
   };
 
-  G.assignRole = (s) => {
-    const p = s.player;
-    const q = G.pitchQuality(p);
-    const st = p.pitcher.stamina;
-    if (st >= 55 && (p.trust >= 55 || q >= 55)) p.role = 'SP';
-    else if (q >= 58 && p.trust >= 65) p.role = 'CL';
-    else p.role = 'RP';
-  };
 
   // ---------- 年間スケジュール ----------
   G.scheduled = (s) => {
@@ -452,14 +406,25 @@
       scene(s, 'オープン戦開幕', 'キャンプを打ち上げ、オープン戦が始まる。開幕1軍を勝ち取れ！');
     }
     if (w === 12) {
-      const first = !p.injury && (p.trust >= 50 || ov >= 62);
+      // 開幕1軍の選考：能力・キャンプでの評価・オープン戦の結果
+      G.ensureUsage(s);
+      let fit;
+      if (G.isPitcher(p)) {
+        const open = s.open.pit;
+        const openERA = open.outs >= 9 ? (open.er * 27) / open.outs : null;
+        fit = G.expERA(s) - (openERA !== null ? (3.6 - openERA) * 0.15 : 0) - (p.trust - 50) * 0.01 <= s.flags.barERA + 0.8;
+      } else {
+        const open = s.open.bat;
+        const openOPS = open.pa >= 10 ? G.batDerived(open).ops : null;
+        fit = G.expOPS(s) + (openOPS !== null ? (openOPS - 0.7) * 0.25 : 0) + (p.trust - 50) * 0.001 >= s.flags.bar - 0.08;
+      }
+      const first = !p.injury && fit;
       p.squad = first ? 'first' : 'second';
-      if (G.isPitcher(p)) G.assignRole(s);
       G.resetStandings(s);
       s.rotation = G.ri(0, 5);
       s.farmRotation = G.ri(0, 5);
       if (first) {
-        const role = G.isPitcher(p) ? `（${G.roleName(p)}）` : p.trust >= 55 ? '（スタメン）' : '（ベンチ入り）';
+        const role = `（${G.openingUsage(s)}）`;
         scene(s, '開幕1軍！', `開幕1軍メンバーに選ばれた！${role}\nいよいよペナントレースが始まる！`, { big: '開幕1軍' });
         log(s, `開幕1軍入り${role}`, 'good');
         if (!s.flags.firstPromotion) {
@@ -842,6 +807,12 @@
     p.yearsPro++;
     s.flags.releasedThisYear = false;
     const msgs = G.applyAging(p);
+    G.newSeasonBars(s);
+    const usage = G.ensureUsage(s);
+    usage.form = [];
+    usage.farmForm = [];
+    s.flags.downUntil = 0;
+    p.goodwill = Math.round(p.goodwill * 0.5);
     p.trust = G.clamp(p.trust * 0.6 + 20 + (G.overall(p) - 50) * 0.4, 5, 90);
     p.condition = 2;
     p.stamina = 100;

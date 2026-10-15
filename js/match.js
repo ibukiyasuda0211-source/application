@@ -89,10 +89,14 @@
     const active = p.squad === 'first' && !p.injury && !s.retired;
     if (!active) return ctx;
     if (!G.isPitcher(p)) {
-      const starter = p.trust >= 55 || G.chance(0.2);
-      const nPA = starter ? (G.chance(0.45) ? 5 : 4) : G.chance(0.35) ? 1 : 0;
+      const u = G.ensureUsage(s);
+      const regular = u.status === 'starter' && u.slot;
+      const spot = !regular && G.chance(0.12);
+      const starter = regular || spot;
+      const slot = regular ? u.slot : spot ? (p.position === 'C' ? 8 : G.pick([7, 8])) : null;
+      const nPA = starter ? (G.chance(slot <= 3 ? 0.55 : slot >= 7 ? 0.3 : 0.45) ? 5 : 4) : G.chance(0.35) ? 1 : 0;
       if (nPA) {
-        Object.assign(ctx, { kind: 'bat', nPA, starter, order: starter ? G.battingOrder(p) : '代打', oppP: { name: G.randomMaleName(), type: G.pick(G.OPP_PITCHERS).id } });
+        Object.assign(ctx, { kind: 'bat', nPA, starter, order: starter ? `${slot}番${spot ? '（休養日の代役）' : ''}` : '代打', oppP: { name: G.randomMaleName(), type: G.pick(G.OPP_PITCHERS).id } });
       }
     } else if (p.role === 'SP') {
       s.rotation = (s.rotation || 0) + 1;
@@ -104,13 +108,19 @@
       const pWin = G.clamp(0.5 + (myStr - oppStr) * 0.012, 0.25, 0.75);
       const pre = G.chance(0.03) ? 'D' : G.chance(pWin) ? 'W' : 'L';
       const lead = G.ri(1, 4);
+      const rank = p.role === 'CL' ? 'CL' : p.rpRank || 'mid';
+      const close = pre === 'W' && lead <= 3;
       let appear;
-      if (p.role === 'CL') appear = pre === 'W' && lead <= 3 ? G.chance(0.85) : G.chance(0.12);
-      else appear = G.chance(0.42);
+      if (rank === 'CL') appear = close ? G.chance(0.85) : G.chance(0.12);
+      else if (rank === 'setup') appear = close ? G.chance(0.65) : G.chance(0.12);
+      else if (rank === 'mid') appear = G.chance(0.38);
+      else appear = pre === 'L' ? G.chance(0.5) : G.chance(0.08);
       if (appear) {
         let situation;
-        if (p.role === 'CL' && pre === 'W' && lead <= 3) situation = `9回、${lead}点リードの場面で登板！`;
-        else if (pre === 'W' && lead <= 3) situation = `${G.ri(6, 8)}回、${lead}点リードの場面で登板`;
+        if (rank === 'CL' && close) situation = `9回、${lead}点リードの場面で登板！`;
+        else if (rank === 'setup' && close) situation = `8回、${lead}点リードの場面で登板`;
+        else if (rank === 'mop') situation = `${G.ri(5, 8)}回、ビハインドの場面で登板`;
+        else if (close) situation = `${G.ri(6, 7)}回、${lead}点リードの場面で登板`;
         else if (pre === 'D') situation = `${G.ri(7, 9)}回、同点の場面で登板`;
         else situation = `${G.ri(6, 9)}回、${pre === 'W' ? '大量リード' : 'ビハインド'}の場面で登板`;
         Object.assign(ctx, { kind: 'pit', role: p.role, pre, lead, lineup: G.pick(G.OPP_LINEUPS).id, situation });
@@ -188,6 +198,7 @@
         const lead = ctx.lead;
         if (ctx.role === 'CL' && outcome === 'W' && lead <= 3) {
           if (st.r >= lead) {
+            res.blown = true;
             if (G.chance(0.6)) {
               st.l = 1;
               outcome = 'L';
@@ -248,6 +259,7 @@
       }
     }
     let res = null;
+    s.dayCount = (s.dayCount || 0) + 1;
     if (own) {
       res = G.executeOwnGame(s, own, apId);
       G.recordResult(s, p.teamId, res.outcome);
@@ -255,11 +267,18 @@
       gw.games.push(res);
       if (res.kind === 'bat') G.addStats(gw.acc.weekBat, res.line);
       if (res.kind === 'pit') G.addStats(gw.acc.weekPit, res.line);
+      // 監督の判断（打順・スタメン・登録抹消）は毎試合
+      G.managerAfterDay(s, res);
     }
     if (p.squad === 'second' && !p.injury && !s.retired) {
       const fr = G.playFarmGame(s);
       if (fr && fr.kind === 'bat') G.addStats(gw.acc.farmBat, fr.line);
       if (fr && fr.kind === 'pit') G.addStats(gw.acc.farmPit, fr.line);
+      if (fr) {
+        const u = G.ensureUsage(s);
+        u.farmForm.push(fr.line);
+        if (u.farmForm.length > 15) u.farmForm.shift();
+      }
     }
     gw.d++;
     gw.cur = null;

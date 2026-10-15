@@ -148,6 +148,18 @@
     </aside>`;
   };
 
+  const usageBox = (s) => {
+    const u = G.usageSummary(s);
+    if (!u) {
+      const p = s.player;
+      if (p.squad === 'second' && !s.retired && G.phaseOf(s.week).id === 'season' && s.dayCount < (s.flags.downUntil || 0)) {
+        return `<div class="usage"><b>登録抹消中</b><small>再登録まであと${s.flags.downUntil - s.dayCount}試合日</small></div>`;
+      }
+      return '';
+    }
+    return `<div class="usage"><b>起用：${esc(u.role)}</b><small>${esc(u.detail)}</small>${u.mood ? `<small class="mood">${esc(u.mood)}</small>` : ''}</div>`;
+  };
+
   const playerCard = (s) => {
     const p = s.player;
     if (s.after) return afterCard(s);
@@ -165,6 +177,7 @@
         ${p.injury ? `<span class="tag injury">故障中：${esc(p.injury.name)}（残り${p.injury.weeks}週）</span>` : ''}
       </div>
       <div class="cond ${cond.cls}"><span class="arrow">${cond.icon}</span>${cond.name}</div>
+      ${usageBox(s)}
       <div class="bars">
         ${bar('体力', p.stamina, staminaColor(p.stamina))}
         ${bar('首脳陣評価', p.trust, '#3b8ee0')}
@@ -248,7 +261,9 @@
     let scout;
     if (own.kind === 'bat') {
       const o = G.OPP_PITCHERS.find((x) => x.id === own.oppP.type);
+      const us = G.usageSummary(s);
       scout = `<div class="scout"><b>${own.starter ? `今日は「${own.order}」でスタメン出場` : 'ベンチスタート（代打で出番があるかも）'}</b>
+        ${us ? `<div class="muted">${esc(us.detail)}${us.mood ? `・${esc(us.mood)}` : ''}</div>` : ''}
         <div>相手先発：${esc(own.oppP.name)}（<b>${o.name}</b>）</div><div class="muted">スコアラー「${o.hint}」</div></div>`;
     } else {
       const l = G.OPP_LINEUPS.find((x) => x.id === own.lineup);

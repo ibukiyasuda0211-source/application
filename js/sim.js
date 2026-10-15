@@ -193,7 +193,7 @@
     if (p.squad !== 'first' || p.injury) return 0;
     let bonus = 0;
     if (G.isPitcher(p)) bonus = (G.overall(p) - 50) * 0.06;
-    else if (p.trust >= 55) bonus = (G.overall(p) - 50) * 0.12;
+    else if (p.usage && p.usage.status === 'starter') bonus = (G.overall(p) - 50) * 0.12;
     if (p.skills.includes('mood')) bonus += 1;
     return bonus;
   };

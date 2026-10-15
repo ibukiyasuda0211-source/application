@@ -29,6 +29,7 @@
     }
     if (fx.trust) {
       p.trust = G.clamp(p.trust + fx.trust, 0, 100);
+      p.goodwill = G.clamp((p.goodwill || 0) + fx.trust, -20, 20);
       out.push(`首脳陣の評価${fx.trust > 0 ? 'アップ' : 'ダウン'}`);
     }
     if (fx.money) {

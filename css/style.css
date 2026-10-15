@@ -1357,3 +1357,23 @@ h3 {
 .draft-table td {
   vertical-align: top;
 }
+
+/* ---------- 起用状況 ---------- */
+.usage {
+  display: grid;
+  gap: 1px;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #f1f5fb;
+  border: 1.5px solid #d6e2f5;
+  font-size: 14px;
+}
+.usage small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.usage .mood {
+  color: #2c56b5;
+  font-weight: 700;
+}

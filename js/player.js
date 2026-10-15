@@ -240,7 +240,13 @@
   G.positionName = (p) => G.posById(p.position).name;
 
   G.roleName = (p) => {
-    if (!G.isPitcher(p)) return p.trust >= 55 ? 'レギュラー' : '控え';
-    return { SP: '先発', RP: '中継ぎ', CL: '抑え' }[p.role] || '中継ぎ';
+    if (!G.isPitcher(p)) {
+      const u = p.usage;
+      if (!u) return p.trust >= 55 ? 'レギュラー' : '控え';
+      return u.status === 'starter' && u.slot ? `${u.slot}番スタメン` : '控え';
+    }
+    if (p.role === 'SP') return '先発';
+    if (p.role === 'CL') return '抑え';
+    return (G.RP_RANKS && G.RP_RANKS[p.rpRank]) || '中継ぎ';
   };
 })();
