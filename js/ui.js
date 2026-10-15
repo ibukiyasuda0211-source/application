@@ -14,7 +14,7 @@
     growth: 'random',
   });
 
-  const ui = { screen: 'title', tab: 'action', s: null, create: defaultCreate(), slot: 0 };
+  const ui = { screen: 'title', tab: 'action', s: null, create: defaultCreate(), slot: 0, confirm: null };
 
   let toastTimer = null;
   const toast = (msg) => {
@@ -544,6 +544,12 @@
     else if (ui.screen === 'game') html = gameView();
     else if (ui.screen === 'ending') html = endingView();
     else html = titleView();
+    if (ui.confirm) {
+      html += `<div class="modal-back"><div class="modal" role="dialog" aria-modal="true">
+        <div class="modal-title">確認</div><div class="modal-text">${br(ui.confirm.text)}</div>
+        <div class="modal-choices"><button class="btn" data-act="confirmYes">${esc(ui.confirm.yes)}</button>
+        <button class="btn sub" data-act="confirmNo">やめる</button></div></div></div>`;
+    }
     app.innerHTML = html;
   };
 
@@ -572,8 +578,11 @@
       window.scrollTo(0, 0);
     },
     delete: (arg) => {
-      if (!confirm(`スロット${Number(arg) + 1}のデータを削除しますか？`)) return;
-      G.deleteSlot(Number(arg));
+      ui.confirm = {
+        text: `スロット${Number(arg) + 1}のデータを削除しますか？`,
+        yes: '削除する',
+        run: () => G.deleteSlot(Number(arg)),
+      };
       render();
     },
     totitle: () => {
@@ -685,9 +694,26 @@
       afterTurn();
     },
     retire: () => {
-      if (!confirm('本当に現役を引退しますか？（取り消しできません）')) return;
-      G.retire(ui.s, '自らの意思で現役を引退した');
-      afterTurn();
+      ui.confirm = {
+        text: '本当に現役を引退しますか？\n（取り消しできません）',
+        yes: '引退する',
+        run: () => {
+          G.retire(ui.s, '自らの意思で現役を引退した');
+          if (ui.s.ended && !ui.s.queue.length) ui.screen = 'ending';
+          save();
+        },
+      };
+      render();
+    },
+    confirmYes: () => {
+      const c = ui.confirm;
+      ui.confirm = null;
+      if (c) c.run();
+      render();
+    },
+    confirmNo: () => {
+      ui.confirm = null;
+      render();
     },
     quit: () => {
       save();
