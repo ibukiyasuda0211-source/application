@@ -1377,3 +1377,82 @@ h3 {
   color: #2c56b5;
   font-weight: 700;
 }
+
+/* ---------- SNS（エゴサーチ） ---------- */
+.sns-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.fan-meter {
+  display: grid;
+  gap: 2px;
+  min-width: 200px;
+}
+.fan-meter b {
+  font-size: 20px;
+}
+.fan-meter .track {
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #e05555, #e3b600 50%, #2fb46e);
+  position: relative;
+  overflow: visible;
+}
+.fan-meter .fill {
+  height: 10px;
+  border-right: 3px solid var(--ink);
+  background: transparent;
+}
+.pos {
+  color: var(--good);
+}
+.neg {
+  color: var(--bad);
+}
+.timeline-sns {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+.post {
+  display: flex;
+  gap: 10px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--line);
+}
+.post .avatar {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  color: #fff;
+  background: #8aa38a;
+}
+.post.pos .avatar {
+  background: #2fb46e;
+}
+.post.neg .avatar {
+  background: #d65c5c;
+}
+.post .body {
+  min-width: 0;
+}
+.post .who {
+  font-size: 13px;
+}
+.post .text {
+  font-size: 15px;
+  margin: 2px 0;
+  word-break: break-word;
+}
+.post .meta {
+  font-size: 12px;
+}

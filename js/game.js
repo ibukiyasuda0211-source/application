@@ -53,7 +53,7 @@
       npc: { senpai: G.randomMaleName(), rival: G.randomMaleName(), coach: G.pick(G.SURNAMES) },
       teamStr: {},
       standings: {},
-      stats: { bat: G.emptyBat(), pit: G.emptyPit() },
+      stats: { bat: G.emptyBat(), pit: G.emptyPit(), fld: G.emptyFld() },
       farm: { bat: G.emptyBat(), pit: G.emptyPit() },
       open: { bat: G.emptyBat(), pit: G.emptyPit() },
       leaders: null,
@@ -178,7 +178,10 @@
       log(s, `${inj.name}で登録抹消…`, 'bad');
     }
     p.condition = Math.max(0, p.condition - 1);
-    if (weeks >= 3) s.history.push({ year: s.year, text: `${inj.name}（全治${weeks}週）` });
+    if (weeks >= 3) {
+      s.history.push({ year: s.year, text: `${inj.name}（全治${weeks}週）` });
+      G.buzz(s, 'injury');
+    }
     return p.injury;
   };
 
@@ -297,6 +300,8 @@
     if (r < 0.15) p.condition = Math.min(4, p.condition + 1);
     else if (r < 0.3 && !(p.hobby === 'fishing' && G.chance(0.5))) p.condition = Math.max(0, p.condition - 1);
     if (p.stamina < 20 && G.chance(0.5)) p.condition = Math.max(0, p.condition - 1);
+    // 好不調の波はいずれ落ち着く
+    else if (p.condition !== 2 && G.chance(0.2)) p.condition += p.condition < 2 ? 1 : -1;
     if (p.squad === 'second') p.popularity = Math.max(0, p.popularity - 0.05);
 
     // 私生活
@@ -339,6 +344,9 @@
     const r = { ...gw.acc, games: gw.games };
     G.addStats(s.stats.bat, r.weekBat);
     G.addStats(s.stats.pit, r.weekPit);
+    if (!s.stats.fld) s.stats.fld = G.emptyFld();
+    if (r.weekFld) G.addStats(s.stats.fld, r.weekFld);
+    G.simTeammatesWeek(s, gw.n);
     G.addStats(s.farm.bat, r.farmBat);
     G.addStats(s.farm.pit, r.farmPit);
     const after = s.standings[p.teamId];
@@ -406,8 +414,10 @@
       scene(s, 'オープン戦開幕', 'キャンプを打ち上げ、オープン戦が始まる。開幕1軍を勝ち取れ！');
     }
     if (w === 12) {
-      // 開幕1軍の選考：能力・キャンプでの評価・オープン戦の結果
+      // 開幕1軍の選考：能力・キャンプでの評価・オープン戦の結果・同じ守備位置のライバル
       G.ensureUsage(s);
+      G.ensureRoster(s);
+      G.newSeasonBars(s);
       let fit;
       if (G.isPitcher(p)) {
         const open = s.open.pit;
@@ -448,6 +458,7 @@
         scene(s, 'オールスター', `ファン投票・監督推薦でオールスターに選出された！\n${res}`, { big: 'オールスター' });
         p.popularity = G.clamp(p.popularity + 4, 0, 100);
         log(s, `オールスター出場！${res}`, 'good');
+        G.buzz(s, 'allstar');
       }
     }
     if (w === G.SEASON_END) G.seasonEnd(s);
@@ -503,7 +514,10 @@
       if (st.hld >= L.hld.final) won.push('最優秀中継ぎ');
     }
     if (G.isMLB(s)) won.forEach((t, i) => (won[i] = `MLB${t}`));
-    for (const t of won) s.titles.push({ year: s.year, name: t });
+    for (const t of won) {
+      s.titles.push({ year: s.year, name: t });
+      G.buzz(s, 'title', { name: t });
+    }
     p.popularity = G.clamp(p.popularity + won.length * 6, 0, 100);
     let text = `ペナントレースが終了した。\n${G.teamById(p.teamId).name}は${rank}位。`;
     if (rank === 1) {
@@ -594,8 +608,11 @@
     } else {
       const st = s.stats.bat;
       if (war >= 3.5 && st.pa >= 443) won.push('ベストナイン');
-      const need = p.skills.includes('glove') ? 65 : 72;
-      if (st.g >= 100 && p.batter.fielding >= need && G.chance(0.75)) won.push('ゴールデングラブ賞');
+      // ゴールデングラブ賞：守備得点と守備率で選ばれる
+      const fld = s.stats.fld || G.emptyFld();
+      const pct = G.fieldingPct(fld);
+      const avgPct = (G.POS_DEF[p.position] || G.POS_DEF.OF).avgPct;
+      if (st.g >= 100 && fld.drs >= 8 && pct !== null && pct >= avgPct) won.push('ゴールデングラブ賞');
       if (st.pa >= 300) s.flags.rookieEligible = false;
     }
     if (G.isMLB(s)) {
@@ -610,7 +627,10 @@
       if (cy >= 0 && war < 5.5) won.splice(cy, 1);
     }
     if (!won.length) return;
-    for (const t of won) s.titles.push({ year: s.year, name: t });
+    for (const t of won) {
+      s.titles.push({ year: s.year, name: t });
+      G.buzz(s, 'title', { name: t });
+    }
     p.popularity = G.clamp(p.popularity + won.length * 4, 0, 100);
     scene(s, '表彰式', `${G.isMLB(s) ? 'シーズンの表彰' : 'NPBアワーズ'}で表彰された！\n\n🏆 ${won.join('\n🏆 ')}`, { big: won[0] });
     for (const t of won) log(s, `${t}を受賞！`, 'good');
@@ -746,6 +766,7 @@
         return;
       }
       log(s, `契約更改：${G.fmtMoney(p.salary)}`, 'good');
+      G.buzz(s, p.salary >= (s.career.length ? s.career[s.career.length - 1].salary : 0) ? 'raise' : 'cut', { salary: p.salary });
     } else if (q.kind === 'release') {
       if (idx === 0) {
         const ov = G.overall(p);
@@ -800,6 +821,7 @@
     const p = s.player;
     G.pushCareer(s);
     G.updateDraftClass(s);
+    G.updateRosterYear(s);
     if (p.league === 'mlb' && s.flags.mlbStart <= s.year) s.flags.mlbRookie = false;
     s.year++;
     s.week = 1;
@@ -816,7 +838,7 @@
     p.trust = G.clamp(p.trust * 0.6 + 20 + (G.overall(p) - 50) * 0.4, 5, 90);
     p.condition = 2;
     p.stamina = 100;
-    s.stats = { bat: G.emptyBat(), pit: G.emptyPit() };
+    s.stats = { bat: G.emptyBat(), pit: G.emptyPit(), fld: G.emptyFld() };
     s.farm = { bat: G.emptyBat(), pit: G.emptyPit() };
     s.open = { bat: G.emptyBat(), pit: G.emptyPit() };
     for (const t of G.TEAMS) {
@@ -838,6 +860,7 @@
       age: p.age,
       team: p.teamId,
       bat: { ...s.stats.bat },
+      fld: { ...(s.stats.fld || G.emptyFld()) },
       pit: { ...s.stats.pit },
       farmBat: { ...s.farm.bat },
       farmPit: { ...s.farm.pit },
@@ -850,13 +873,15 @@
   G.careerTotals = (s) => {
     const bat = G.emptyBat();
     const pit = G.emptyPit();
+    const fld = G.emptyFld();
     let war = 0;
     for (const c of s.career) {
       G.addStats(bat, c.bat);
       G.addStats(pit, c.pit);
+      if (c.fld) G.addStats(fld, c.fld);
       war += c.war;
     }
-    return { bat, pit, war };
+    return { bat, pit, fld, war };
   };
 
   // ---------- 引退・エンディング ----------

@@ -25,6 +25,12 @@
   G.newSeasonBars = (s) => {
     const strong = (G.teamStrength(s, s.player.teamId) - 50) * 0.003;
     s.flags.bar = G.rf(0.67, 0.75) + strong;
+    // チームメイトがいれば、同じ守備位置のライバルの実力を基準にする
+    const rv = s.roster && G.positionRival ? G.positionRival(s) : null;
+    if (rv) {
+      const w = (G.POS_DEF[rv.pos] || G.POS_DEF.OF).weight;
+      s.flags.bar = 0.65 + (rv.rating - 50) * 0.009 + (rv.prof.fielding - 50) * 0.0012 * w + G.levelOffset(s) * 0.009;
+    }
     s.flags.barERA = G.rf(3.4, 4.1) - strong * 8;
   };
 
@@ -57,7 +63,14 @@
     const established = cpa >= 1200 || (season.pa >= 250 && seasonOPS >= 0.78);
     if (established) val += 0.03;
     val += p.goodwill * 0.002;
-    return { val, exp, formOPS, formPA: f.pa, formAvg: f.ab ? f.h / f.ab : null, decideOPS, decidePA: d.pa, seasonOPS, established, bar: s.flags.bar };
+    // 守備：能力と直近のプレー（失策・好守備）を評価に加える
+    const def = G.POS_DEF[p.position] || G.POS_DEF.OF;
+    const recentE = u.form.slice(-10).reduce((a, x) => a + (x.fe || 0), 0);
+    const recentFine = u.form.slice(-10).reduce((a, x) => a + (x.ffine || 0), 0);
+    const seasonDrs = s.stats.fld ? s.stats.fld.drs : 0;
+    const defAdj = def.weight * ((p.batter.fielding + p.batter.catching) / 2 - 50) * 0.0012 + seasonDrs * 0.002 - recentE * 0.012 + recentFine * 0.006;
+    val += defAdj;
+    return { defAdj, recentE, recentFine, val, exp, formOPS, formPA: f.pa, formAvg: f.ab ? f.h / f.ab : null, decideOPS, decidePA: d.pa, seasonOPS, established, bar: s.flags.bar };
   };
 
   // 打順の決定：まず選手のタイプで「定位置」を決め、評価が足りなければ下位へ
@@ -159,6 +172,7 @@
     const down = G.squadName(p, 'second');
     G.scene(s, '登録抹消', `${reason}\n\n監督「しばらく${down}で自分の形を取り戻してこい」\n\n出場選手登録を抹消された。再登録は10日後から。`);
     usageLog(s, `${down}降格（登録抹消）。${reason}`, 'bad');
+    G.buzz(s, 'demote');
     G.addHappy(s, -6);
   };
 
@@ -181,7 +195,7 @@
     }
     if (res && res.kind === 'bat') {
       const l = res.line;
-      u.form.push({ g: 1, pa: l.pa, ab: l.ab, h: l.h, d: l.d, t: l.t, hr: l.hr, bb: l.bb, k: l.k });
+      u.form.push({ g: 1, pa: l.pa, ab: l.ab, h: l.h, d: l.d, t: l.t, hr: l.hr, bb: l.bb, k: l.k, fe: res.fld ? res.fld.e : 0, ffine: res.fld ? res.fld.fine : 0 });
       if (u.form.length > 15) u.form.shift();
     }
     batterDecision(s);
@@ -217,6 +231,18 @@
       return;
     }
 
+    // 守備のミスが続いたらスタメンを外れる
+    if (u.status === 'starter' && v.recentE >= 4 && u.sinceChange >= 3 && !(v.established && v.val >= bar)) {
+      u.status = 'bench';
+      u.slot = null;
+      u.benchGames = 0;
+      u.sinceChange = 0;
+      G.scene(s, 'スタメン落ち', `直近10試合で失策${v.recentE}。\n監督「守りでリズムを崩している。少しベンチで頭を冷やせ」`);
+      usageLog(s, `守備のミスが続き、スタメンを外れた（直近10試合で失策${v.recentE}）`, 'bad');
+      G.buzz(s, 'bench');
+      G.addHappy(s, -4);
+      return;
+    }
     // スタメン
     // 15試合単位で見る。実績のある選手ほど我慢してもらえる
     const line = v.established ? 0.42 : 0.48;
@@ -242,6 +268,7 @@
         u.sinceChange = 0;
         G.scene(s, 'スタメン落ち', `試合前のミーティング。スタメン表に自分の名前がなかった。\n\n${formTxt ? `${formTxt}。` : ''}監督「少しベンチから試合を見てみろ」`);
         usageLog(s, `スタメンを外れた（${formTxt || '不振'}）`, 'bad');
+        G.buzz(s, 'bench');
         G.addHappy(s, -4);
       }
       return;
@@ -377,6 +404,7 @@
     const up = G.squadName(p, 'first');
     G.scene(s, `${up}昇格！`, `${note ? note + '\n' : ''}${first ? `監督「${p.name}、明日から${up}だ。思い切ってやってこい！」\n\nついに念願の${up}昇格！` : `再び${up}に呼ばれた！今度こそ結果を残すぞ！`}\n（${role}）`, { big: `${up}昇格` });
     usageLog(s, `${up}に昇格（${role}）`, 'good');
+    G.buzz(s, 'promote');
     if (first) s.history.push({ year: s.year, text: '初の1軍昇格' });
   };
 
@@ -414,11 +442,13 @@
       return { role: G.roleName(p), detail: recent };
     }
     const v = G.batterView(s);
-    const role = u.status === 'starter' ? `${u.slot}番・スタメン` : '控え（代打・守備固め）';
-    const detail = v.formPA >= 15 ? `直近${Math.min(FORM_GAMES, u.form.length)}試合 打率${fmt(v.formAvg)}・OPS ${fmt(v.formOPS)}` : 'まだ打席が少ない';
+    const role = u.status === 'starter' ? `${u.slot}番・スタメン` : p.batter.fielding >= 66 ? '控え（守備固め・代打）' : '控え（代打要員）';
+    let detail = v.formPA >= 15 ? `直近${Math.min(FORM_GAMES, u.form.length)}試合 打率${fmt(v.formAvg)}・OPS ${fmt(v.formOPS)}` : 'まだ打席が少ない';
+    if (v.recentE || v.recentFine) detail += `／守備 失策${v.recentE}・好守${v.recentFine}`;
     let mood;
     if (u.status === 'bench') mood = '監督「もう少しベンチで見ていろ」';
     else if (u.trial > 0) mood = '監督「しばらくは我慢して使う」';
+    else if (v.recentE >= 3) mood = '監督「守備をなんとかしろ」';
     else if (v.formOPS !== null && v.formOPS < 0.5) mood = '監督の信頼が揺らいでいる…';
     else if (v.formOPS !== null && v.formOPS >= 0.9) mood = '監督「今のお前は外せない」';
     else mood = '';

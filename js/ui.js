@@ -201,7 +201,8 @@
     { id: 'action', name: '行動' },
     { id: 'upgrade', name: '能力アップ' },
     { id: 'stats', name: '成績' },
-    { id: 'standings', name: '順位表' },
+    { id: 'team', name: 'チーム' },
+    { id: 'sns', name: 'SNS' },
     { id: 'draft', name: 'ドラフト同期' },
     { id: 'people', name: '人間関係' },
     { id: 'life', name: '人生' },
@@ -289,8 +290,12 @@
     const read = r.match === 'good' ? '<div class="read good">読みが当たった！ 作戦がハマった。</div>' : r.match === 'bad' ? '<div class="read bad">相手の思うつぼだった…。作戦が裏目に出た。</div>' : '';
     let detail;
     if (r.kind === 'bat') {
-      detail = `<ol class="pa-list">${r.pas.map((pa, i) => `<li class="pa-${pa.code}"><span>第${i + 1}打席</span>${esc(G.paText(pa))}</li>`).join('')}</ol>
-        <div class="line">${G.batLineText(r.line)}</div>`;
+      const plays = (r.plays || []).map((t) => `<li class="${/失策|捕逸/.test(t) ? 'pa-bad' : 'pa-HR'}"><span>守備</span>${esc(t)}</li>`).join('');
+      const pas = r.pas.map((pa, i) => `<li class="pa-${pa.code}"><span>第${i + 1}打席</span>${esc(G.paText(pa))}</li>`).join('');
+      const head = r.order === '守備固め' ? '<div class="muted" style="font-size:13px">終盤、守備固めで出場</div>' : '';
+      const fl = r.fld ? G.fldLineText(r.fld) : '';
+      detail = `${head}<ol class="pa-list">${pas}${plays}</ol>
+        <div class="line">${r.line.pa ? G.batLineText(r.line) : '打席なし'}${fl ? `／${fl}` : ''}</div>`;
     } else {
       detail = `<ol class="pa-list">${G.inningText(r.innings, r.startInning)
         .map((t) => `<li class="${/\d+失点/.test(t) ? 'pa-bad' : 'pa-OUT'}">${esc(t)}</li>`)
@@ -553,7 +558,101 @@
           .join('')}</table></div>`
       : '<p class="muted mt">年度別成績は1年目のシーズン終了後に表示されます。</p>';
 
-    return `<div class="panel"><h3>${s.year}年 今季成績</h3>${cur}${raceView(s)}${career}</div>`;
+    let defense = '';
+    if (!pitcher) {
+      const fh = `<tr><th></th><th>試合</th><th>刺殺</th><th>補殺</th><th>失策</th><th>守備率</th><th>好守備</th><th>守備得点</th>${p.position === 'C' ? '<th>盗塁企図</th><th>阻止</th><th>阻止率</th><th>捕逸</th>' : ''}</tr>`;
+      const fr = (label, f, cls = '') => {
+        if (!f) return '';
+        const pct = G.fieldingPct(f);
+        const c = p.position === 'C' ? `<td>${f.sba}</td><td>${f.cs}</td><td>${f.sba ? G.fmtRate(f.cs, f.sba) : '.---'}</td><td>${f.pb}</td>` : '';
+        return `<tr class="${cls}"><td>${label}</td><td>${f.g}</td><td>${f.po}</td><td>${f.a}</td><td>${f.e}</td><td>${pct === null ? '.---' : pct.toFixed(3).replace(/^0/, '')}</td><td>${f.fine}</td><td class="${f.drs >= 5 ? 'lead' : ''}">${f.drs >= 0 ? '+' : ''}${f.drs.toFixed(1)}</td>${c}</tr>`;
+      };
+      const yrs = s.career.filter((c) => c.fld && c.fld.g).map((c) => fr(`${c.year}`, c.fld)).join('');
+      defense = `<h3 class="mt">守備成績（${G.positionName(p)}）</h3>
+        <div class="tbl-wrap"><table class="stats">${fh}${fr('今季', s.stats.fld || G.emptyFld(), 'me')}${yrs}${yrs ? fr('通算', tot.fld, 'total') : ''}</table></div>
+        <p class="muted" style="font-size:12px;margin-top:-8px">守備得点：平均的な守備と比べて何点防いだか（プラスほど良い）。守備の評価は打順・スタメン争いやゴールデングラブ賞にも影響する。</p>`;
+    }
+    return `<div class="panel"><h3>${s.year}年 今季成績</h3>${cur}${defense}${raceView(s)}${career}</div>`;
+  };
+
+  const teamTab = (s) => {
+    const p = s.player;
+    const R = G.ensureRoster(s);
+    G.assignTeamRoles(s);
+    const team = G.teamById(p.teamId);
+    const tag = (m) => (G.mateTag(m) ? `<span class="tag friend">${G.mateTag(m)}</span>` : '') + (m.rookie ? '<span class="tag">新人</span>' : '') + (m.injured ? '<span class="tag injury">故障</span>' : '');
+    const batStat = (st) => (st.pa ? `${G.fmtRate(st.h, st.ab)}・${st.hr}本・${st.rbi}点` : '-');
+    const pitStat = (st) => (st.g ? `${st.g}登板 ${st.w}勝${st.l}敗${st.s ? ` ${st.s}S` : ''}${st.hld ? ` ${st.hld}H` : ''} 防${G.fmtERA(st.er, st.outs)}` : '-');
+    // レギュラー争い
+    let rivalBox = '';
+    const rv = G.positionRival(s);
+    if (rv && !s.retired) {
+      const meStarter = p.squad === 'first' && p.usage && p.usage.status === 'starter';
+      rivalBox = `<div class="usage"><b>${G.positionName(p)}のレギュラー争い</b>
+        <small>${meStarter ? 'いまはあなたがレギュラー。' : 'いまのレギュラーは'}${esc(rv.name)}（${rv.age}歳・総合${G.rank(rv.rating)}・守備${G.rank(rv.prof.fielding)}）今季 ${batStat(rv.stats.bat)}${rv.stats.fld.g ? `・失策${rv.stats.fld.e}` : ''}</small></div>`;
+    }
+    // スタメン（打順）
+    const lu = G.lineup(s)
+      .map((r) => {
+        if (r.me) {
+          const st = s.stats.bat;
+          return `<tr class="me"><td>${r.slot}番</td><td style="text-align:left">${esc(p.name)}（あなた）</td><td>${G.posById(p.position).name}</td><td>${rankBadge(Math.round(G.overall(p)))}</td><td>${batStat(st)}</td></tr>`;
+        }
+        const m = r.m;
+        return `<tr><td>${r.slot}番</td><td style="text-align:left">${esc(m.name)} ${tag(m)}</td><td>${G.posById(m.pos).name}</td><td>${rankBadge(m.rating)}</td><td>${batStat(m.stats.bat)}</td></tr>`;
+      })
+      .join('');
+    const pitcherSlot = '<tr><td>9番</td><td style="text-align:left" class="muted">（先発投手）</td><td>投手</td><td></td><td></td></tr>';
+    // 野手一覧
+    const fielders = R.players
+      .filter((m) => m.pos !== 'P')
+      .sort((a, b) => ({ regular: 0, bench: 1, farm: 2 }[a.role] - { regular: 0, bench: 1, farm: 2 }[b.role] || b.rating - a.rating))
+      .map((m) => {
+        const pct = G.fieldingPct(m.stats.fld);
+        return `<tr><td style="text-align:left">${esc(m.name)} ${tag(m)}</td><td>${G.posById(m.pos).name}</td><td>${m.age}</td><td>${rankBadge(m.rating)}</td><td>${G.rank(m.prof.contact)}/${G.rank(m.prof.power)}/${G.rank(m.prof.speed)}/${G.rank(m.prof.fielding)}</td><td>${G.TEAM_ROLE_NAME[m.role]}</td><td>${batStat(m.stats.bat)}</td><td>${pct === null ? '-' : pct.toFixed(3).replace(/^0/, '')}${m.stats.fld.e ? `（失${m.stats.fld.e}）` : ''}</td></tr>`;
+      })
+      .join('');
+    const roleOrder = { SP: 0, CL: 1, setup: 2, mid: 3, mop: 4, farm: 5 };
+    const pitchers = R.players
+      .filter((m) => m.pos === 'P')
+      .sort((a, b) => roleOrder[a.role] - roleOrder[b.role] || b.rating - a.rating)
+      .map((m) => `<tr><td style="text-align:left">${esc(m.name)} ${tag(m)}</td><td>${G.TEAM_ROLE_NAME[m.role] || '中継ぎ'}</td><td>${m.age}</td><td>${rankBadge(m.rating)}</td><td>${m.prof.velocity}km/h</td><td style="text-align:left">${pitStat(m.stats.pit)}</td></tr>`)
+      .join('');
+    const meP = G.isPitcher(p) && !s.retired ? `<tr class="me"><td style="text-align:left">${esc(p.name)}（あなた）</td><td>${p.squad === 'first' ? G.roleName(p) : G.squadName(p)}</td><td>${p.age}</td><td>${rankBadge(Math.round(G.overall(p)))}</td><td>${p.pitcher.velocity}km/h</td><td style="text-align:left">${pitStat(s.stats.pit)}</td></tr>` : '';
+    const departed = R.departed && R.departed.length ? `<p class="muted" style="font-size:13px">昨オフにチームを去った選手：${R.departed.map((d) => `${esc(d.name)}（${esc(d.why)}）`).join('、')}</p>` : '';
+    return `<div class="panel">
+      <h3><span class="team-chip" style="background:${team.color}">${team.short}</span> ${team.name}</h3>
+      ${rivalBox}
+      <h3 class="mt">いまのスタメン</h3>
+      <div class="tbl-wrap"><table class="stats"><tr><th>打順</th><th>選手</th><th>守備</th><th>総合</th><th>今季</th></tr>${lu}${pitcherSlot}</table></div>
+      <h3>野手</h3>
+      <div class="tbl-wrap"><table class="stats"><tr><th>選手</th><th>守備</th><th>年齢</th><th>総合</th><th>ミ/パ/走/守</th><th>起用</th><th>今季（率・本・点）</th><th>守備率</th></tr>${fielders}</table></div>
+      <h3>投手</h3>
+      <div class="tbl-wrap"><table class="stats"><tr><th>選手</th><th>役割</th><th>年齢</th><th>総合</th><th>球速</th><th>今季</th></tr>${meP}${pitchers}</table></div>
+      ${departed}
+    </div>${standingsTab(s)}`;
+  };
+
+  const snsTab = (s) => {
+    const p = s.player;
+    const r = G.egoSearch(s);
+    const tone = (x) => (x.sent > 0 ? 'pos' : x.sent < 0 ? 'neg' : 'neu');
+    return `<div class="panel">
+      <div class="sns-head"><div><h3 style="margin:0">「${esc(p.name.split(' ')[0])}」の検索結果</h3>
+        <small class="muted">フォロワー ${Math.round(p.followers).toLocaleString()}人・投稿は毎週変わる</small></div>
+        <div class="fan-meter"><small class="muted">ファンの評判</small><b class="${r.score >= 60 ? 'pos' : r.score < 45 ? 'neg' : ''}">${r.label}</b>
+        <div class="track"><div class="fill" style="width:${r.score}%"></div></div>
+        <small class="muted">好意的 ${r.pos}・中立 ${r.neutral}・批判的 ${r.neg}</small></div></div>
+      <ul class="timeline-sns">${r.posts
+        .map(
+          (x) => `<li class="post ${tone(x)}"><div class="avatar">${esc(x.name.slice(0, 1))}</div><div class="body">
+          <div class="who"><b>${esc(x.name)}</b> <span class="muted">${esc(x.handle)}・${esc(x.time)}</span></div>
+          <div class="text">${esc(x.text)}</div>
+          <div class="muted meta">💬 ${Math.round(x.rt / 2)}　🔁 ${x.rt}　♡ ${x.likes}</div></div></li>`,
+        )
+        .join('')}</ul>
+      <p class="muted" style="font-size:12px">投稿は架空のファンによるものです。成績・起用・守備・私生活の出来事によって内容が変わります。</p>
+    </div>`;
   };
 
   const standingsTab = (s) => {
@@ -743,7 +842,8 @@
     let body;
     if (ui.tab === 'upgrade') body = upgradeTab(s);
     else if (ui.tab === 'stats') body = statsTab(s);
-    else if (ui.tab === 'standings') body = standingsTab(s);
+    else if (ui.tab === 'team') body = teamTab(s);
+    else if (ui.tab === 'sns') body = snsTab(s);
     else if (ui.tab === 'shop') body = shopTab(s);
     else if (ui.tab === 'life') body = lifeTab(s);
     else if (ui.tab === 'people') body = peopleTab(s);

@@ -162,6 +162,7 @@
       for (let i = 0; i < oldKids; i++) p.kids.push({ name: G.pick(['ゆうと', 'はると', 'さくら', 'ひなた', 'そうた', 'めい']), born: s.year - 1, bond: 50, baseball: null });
     }
     if (G.ensureTeams) G.ensureTeams(s);
+    if (!s.stats.fld) s.stats.fld = G.emptyFld();
     if (!s.draft && G.genDraftClass) G.genDraftClass(s);
     delete p.married;
     delete p.girlfriend;
@@ -190,6 +191,15 @@
     },
     { id: 'study', place: 'home', name: '野球の研究', desc: '精神・技術の経験点', run: (s) => '試合の映像を見て研究した。' + fx(s, { exp: { mind: 8, technique: 5 }, happy: -1 }) },
     { id: 'sns', place: 'home', name: 'SNSを更新', desc: '人気アップ。炎上に注意', run: (s) => G.doSns(s) },
+    {
+      id: 'egosearch', place: 'home', name: 'エゴサーチする', desc: 'ファンの声を読む（SNSタブでも見られる）',
+      run: (s) => {
+        const r = G.egoSearch(s);
+        if (r.score >= 60) return `SNSで自分の名前を検索してみた。ファンの評判は「${r.label}」。温かい声に励まされた。` + fx(s, { happy: 4, exp: { mind: 3 } });
+        if (r.score >= 45) return `SNSで自分の名前を検索してみた。評判は「${r.label}」。期待も厳しい声もある。` + fx(s, { exp: { mind: 6 } });
+        return `SNSで自分の名前を検索してみた。評判は「${r.label}」…。厳しい言葉が胸に刺さる。でも、見返してやる。` + fx(s, { happy: -5, exp: { mind: 10 } });
+      },
+    },
     {
       id: 'call_parents', place: 'home', name: '両親に電話', desc: '実家の両親と話す',
       run: (s) => `${G.pick(['母が「ちゃんと食べてる？」と心配していた。', '父が先週の試合について熱く語ってきた。', '実家の犬が元気だと聞いて安心した。'])}` + fx(s, { aff: { parents: 4 }, happy: 2 }),
@@ -755,6 +765,7 @@
           pt.marriedYear = s2.year;
           if (s2.player.home === 'dorm') s2.player.home = 'apartment';
           s2.history.push({ year: s2.year, text: `${pt.name}と結婚` });
+          G.buzz(s2, 'wedding');
           return text + fx(s2, f);
         };
         return [
@@ -772,6 +783,7 @@
             const name = (input || '').trim().slice(0, 8) || q.input;
             s.player.kids.push({ name, born: s.year, bond: 60, baseball: null });
             s.history.push({ year: s.year, text: `第${s.player.kids.length}子「${name}」誕生` });
+            G.buzz(s, 'baby');
             return `「${name}」と名付けた。この子のためにも、もっと頑張らなきゃ！` + fx(s, { happy: 20, cond: 2, exp: { mind: 25 } });
           },
         },
@@ -838,7 +850,7 @@
     sns_fire: {
       choices: () => [
         { label: 'すぐに謝罪する', run: (s) => '誠実な謝罪で、騒ぎはすぐに収まった。' + fx(s, { pop: -2, happy: -3 }) },
-        { label: '真意を説明する', run: (s) => (G.chance(0.5) ? 'ファンが擁護してくれて、むしろ好感度が上がった！' + fx(s, { pop: 3 }) : '火に油を注いでしまった…。' + fx(s, { pop: -8, trust: -5, happy: -8 })) },
+        { label: '真意を説明する', run: (s) => (G.chance(0.5) ? 'ファンが擁護してくれて、むしろ好感度が上がった！' + fx(s, { pop: 3 }) : (G.buzz(s, 'fire'), '火に油を注いでしまった…。' + fx(s, { pop: -8, trust: -5, happy: -8 }))) },
         { label: 'しばらくSNSを休む', run: (s) => 'スマホを置いて野球に集中した。' + fx(s, { pop: -1, exp: { mind: 8 } }) },
       ],
     },

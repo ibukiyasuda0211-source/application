@@ -157,7 +157,7 @@
       title: 'CM出演オファー',
       text: () => '大手飲料メーカーからCM出演のオファーが舞い込んだ！',
       choices: [
-        { label: '出演する', run: (s) => 'CMがお茶の間に流れた！' + G.applyFx(s, { money: G.ri(5, 20) * 100, pop: 5, stamina: -15 }) },
+        { label: '出演する', run: (s) => { G.buzz(s, 'cm'); return 'CMがお茶の間に流れた！' + G.applyFx(s, { money: G.ri(5, 20) * 100, pop: 5, stamina: -15 }); } },
         { label: '野球に専念する', run: (s) => '「今は野球だけに集中したいんです」' + G.applyFx(s, { exp: { mind: 20 }, trust: 3 }) },
       ],
     },
@@ -266,8 +266,8 @@
       title: '夜遊び発覚',
       text: () => '週刊誌に夜の街を歩く姿を撮られてしまった！',
       choices: [
-        { label: '素直に謝罪する', run: (s) => { s.flags.playCount = 0; return '反省の色を示した。' + G.applyFx(s, { trust: -5, pop: -2 }); } },
-        { label: '開き直る', run: (s) => { s.flags.playCount = 0; return '首脳陣の目が冷たい…' + G.applyFx(s, { trust: -12, pop: 2 }); } },
+        { label: '素直に謝罪する', run: (s) => { s.flags.playCount = 0; G.buzz(s, 'scandal'); return '反省の色を示した。' + G.applyFx(s, { trust: -5, pop: -2 }); } },
+        { label: '開き直る', run: (s) => { s.flags.playCount = 0; G.buzz(s, 'scandal'); return '首脳陣の目が冷たい…' + G.applyFx(s, { trust: -12, pop: 2 }); } },
       ],
     },
     {
@@ -288,7 +288,7 @@
       title: 'チャリティー',
       text: () => '被災地支援のチャリティー活動への協力を依頼された。',
       choices: [
-        { label: '300万円寄付する', run: (s) => '多くの人から感謝の声が届いた。' + G.applyFx(s, { money: -300, pop: 6, exp: { mind: 15 } }) },
+        { label: '300万円寄付する', run: (s) => { G.buzz(s, 'charity'); return '多くの人から感謝の声が届いた。' + G.applyFx(s, { money: -300, pop: 6, exp: { mind: 15 } }); } },
         { label: '野球教室を開く', run: (s) => '子供たちに笑顔が戻った。' + G.applyFx(s, { pop: 3, stamina: -10, exp: { mind: 10 } }) },
       ],
     },

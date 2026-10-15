@@ -274,15 +274,19 @@
   };
 
   // ---------- 評価指標 ----------
-  G.batterWAR = (p, st) => {
+  G.batterWAR = (p, st, fld) => {
     if (!st.pa) return 0;
     const d = G.batDerived(st);
     const wraa = (d.ops - 0.74) * st.pa * 0.2;
     const share = st.g / G.SEASON_GAMES;
     const pos = G.posById(p.position);
-    let def = ((p.batter.fielding - 50) * 0.12 + (pos.defBonus || 0) * 6) * share;
-    if (p.skills.includes('glove')) def += 3 * share;
-    if (p.skills.includes('laser')) def += 2 * share;
+    let def;
+    if (fld && fld.g) def = fld.drs + (pos.defBonus || 0) * 6 * share;
+    else {
+      def = ((p.batter.fielding - 50) * 0.12 + (pos.defBonus || 0) * 6) * share;
+      if (p.skills.includes('glove')) def += 3 * share;
+      if (p.skills.includes('laser')) def += 2 * share;
+    }
     const repl = (st.pa * 12) / 600;
     return (wraa + def + repl + st.sb * 0.2 - st.cs * 0.4) / 10;
   };
@@ -294,5 +298,5 @@
     return ((4.1 - era) * ip / 9 + ip * 0.08) / 10 + st.s * 0.04 + st.hld * 0.02;
   };
 
-  G.seasonWAR = (p, s) => (G.isPitcher(p) ? G.pitcherWAR(p, s.stats.pit) : G.batterWAR(p, s.stats.bat));
+  G.seasonWAR = (p, s) => (G.isPitcher(p) ? G.pitcherWAR(p, s.stats.pit) : G.batterWAR(p, s.stats.bat, s.stats.fld));
 })();

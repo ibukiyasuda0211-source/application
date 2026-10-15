@@ -95,8 +95,12 @@
       const starter = regular || spot;
       const slot = regular ? u.slot : spot ? (p.position === 'C' ? 8 : G.pick([7, 8])) : null;
       const nPA = starter ? (G.chance(slot <= 3 ? 0.55 : slot >= 7 ? 0.3 : 0.45) ? 5 : 4) : G.chance(0.35) ? 1 : 0;
+      const oppP = { name: G.randomMaleName(), type: G.pick(G.OPP_PITCHERS).id };
       if (nPA) {
-        Object.assign(ctx, { kind: 'bat', nPA, starter, order: starter ? `${slot}番${spot ? '（休養日の代役）' : ''}` : '代打', oppP: { name: G.randomMaleName(), type: G.pick(G.OPP_PITCHERS).id } });
+        Object.assign(ctx, { kind: 'bat', nPA, starter, order: starter ? `${slot}番${spot ? '（休養日の代役）' : ''}` : '代打', oppP });
+      } else if (p.batter.fielding >= 66 && G.chance(0.3)) {
+        // 守備の良い控え選手は終盤の守備固めで出場
+        Object.assign(ctx, { kind: 'bat', nPA: G.chance(0.3) ? 1 : 0, starter: false, defOnly: true, order: '守備固め', oppP });
       }
     } else if (p.role === 'SP') {
       s.rotation = (s.rotation || 0) + 1;
@@ -146,11 +150,20 @@
       const matchMods = match === 'good' ? { babip: 1.05, hr: 1.15, k: 0.88 } : match === 'bad' ? { babip: 0.95, hr: 0.85, k: 1.12 } : {};
       const pas = [];
       const st = G.simPlateAppearances(p, ctx.nPA, off, mergeMods(ap.mods, opp.mods, matchMods), pas);
+      st.g = 1;
       res.line = st;
       res.pas = pas;
       res.match = match;
       res.oppP = ctx.oppP;
       pWin = G.clamp(pWin + G.batGameValue(st) * 0.035, 0.1, 0.9);
+      // 守備（スタメンはフル、守備固めは終盤だけ）
+      if (ctx.starter || ctx.defOnly) {
+        const plays = [];
+        const fld = G.simFielding(p, ctx.starter ? 1 : 0.25, plays);
+        res.fld = fld;
+        res.plays = plays;
+        pWin = G.clamp(pWin - fld.e * 0.06 + fld.fine * 0.03 + fld.cs * 0.02 - fld.pb * 0.02, 0.08, 0.92);
+      }
       const d = G.chance(0.03);
       outcome = d ? 'D' : G.chance(pWin) ? 'W' : 'L';
       score = G.scoreline(outcome === 'W', d, Math.max(st.rbi, st.r));
@@ -267,6 +280,13 @@
       gw.games.push(res);
       if (res.kind === 'bat') G.addStats(gw.acc.weekBat, res.line);
       if (res.kind === 'pit') G.addStats(gw.acc.weekPit, res.line);
+      if (res.fld) G.addStats(gw.acc.weekFld, res.fld);
+      if (res.kind === 'bat') {
+        const l = res.line;
+        if (l.hr >= 2 || l.h >= 3) G.buzz(s, 'hotgame', { text: l.hr >= 2 ? `${l.hr}本塁打の大暴れ` : `${l.h}安打の猛打賞` });
+        if (res.fld && res.fld.e && res.outcome === 'L') G.buzz(s, 'error');
+        if (res.fld && res.fld.fine && res.outcome === 'W') G.buzz(s, 'fine');
+      }
       // 監督の判断（打順・スタメン・登録抹消）は毎試合
       G.managerAfterDay(s, res);
     }
@@ -296,7 +316,7 @@
       await: false,
       games: [],
       before: { ...s.standings[s.player.teamId] },
-      acc: { weekBat: G.emptyBat(), weekPit: G.emptyPit(), farmBat: G.emptyBat(), farmPit: G.emptyPit() },
+      acc: { weekBat: G.emptyBat(), weekPit: G.emptyPit(), weekFld: G.emptyFld(), farmBat: G.emptyBat(), farmPit: G.emptyPit() },
     };
   };
 

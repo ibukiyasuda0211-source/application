@@ -92,6 +92,7 @@
     if (G.isPitcher(p)) G.assignRole(s);
     s.history.push({ year: s.year, text: `${team.name}と契約、メジャー挑戦` });
     s.titles.push({ year: s.year, name: 'メジャー挑戦' });
+    G.buzz(s, 'mlb');
     return `${team.name}と契約！ 年俸${G.fmtMoney(offer.salary)}。\n\n渡米会見には100人を超える記者が詰めかけた。いよいよ世界最高峰の舞台へ！` + G.applyFx(s, { pop: 8, happy: 8 });
   };
 
