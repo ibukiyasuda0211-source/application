@@ -16,6 +16,48 @@
 
   G.isPitcher = (p) => p.position === 'P';
 
+  // 最初に選ぶ「武器（特徴）」。得意な能力が伸びるかわりに、少し苦手なところもできる
+  G.WEAPONS = {
+    batter: [
+      { id: 'power', name: 'パワーがある', desc: 'パワー大幅アップ。ミート・走力はやや低め', ab: { power: 14, contact: -4, speed: -3 } },
+      { id: 'hitter', name: '安打製造機', desc: 'ミート大幅アップ。パワーはやや低め', ab: { contact: 14, power: -4 } },
+      { id: 'speed', name: '俊足', desc: '走力大幅アップ＋「盗塁◯」。パワーはやや低め', ab: { speed: 14, power: -4 }, skill: 'steal' },
+      { id: 'arm', name: '強肩', desc: '肩力大幅アップ＋「レーザービーム」', ab: { arm: 14, contact: -2 }, skill: 'laser' },
+      { id: 'glove', name: '守備の名手', desc: '守備力・捕球が大きくアップ。打撃はやや低め', ab: { fielding: 11, catching: 9, power: -3, contact: -2 } },
+      { id: 'eye', name: '出塁の鬼', desc: 'ミートアップ＋「選球眼」。パワーはやや低め', ab: { contact: 6, power: -3 }, skill: 'eye' },
+      { id: 'clutch', name: 'チャンスに強い', desc: 'ミート・パワー少しアップ＋「チャンス◯」', ab: { contact: 3, power: 3, speed: -2 }, skill: 'chance' },
+      { id: 'all', name: 'オールラウンダー', desc: 'すべての能力が少しずつアップ', ab: { contact: 3, power: 3, speed: 3, arm: 3, fielding: 3, catching: 3 } },
+    ],
+    pitcher: [
+      { id: 'fastball', name: '剛速球', desc: '球速大幅アップ＋「ノビ◯」。コントロールはやや低め', ab: { velocity: 6, control: -4 }, skill: 'nobi' },
+      { id: 'control', name: '精密機械', desc: 'コントロール大幅アップ。球速はやや遅め', ab: { control: 14, velocity: -2 } },
+      { id: 'breaking', name: '変化球の魔術師', desc: '変化球が1つ増え、変化量もアップ。球速はやや遅め', ab: { velocity: -2 }, pitches: true },
+      { id: 'stamina', name: '無尽蔵のスタミナ', desc: 'スタミナ大幅アップ＋「尻上がり」。先発向き', ab: { stamina: 14, control: -2 }, skill: 'quick' },
+      { id: 'strikeout', name: '奪三振マシン', desc: '「奪三振」を習得。コントロールはやや低め', ab: { velocity: 2, control: -3 }, skill: 'kkk' },
+      { id: 'heart', name: '強心臓', desc: '「ピンチ◯」を習得＋コントロール少しアップ。リリーフ向き', ab: { control: 4, stamina: -4 }, skill: 'pinch' },
+      { id: 'all', name: 'バランス型', desc: '球速・コントロール・スタミナが少しずつアップ', ab: { velocity: 1, control: 4, stamina: 4 } },
+    ],
+  };
+  G.weaponsFor = (position) => (position === 'P' ? G.WEAPONS.pitcher : G.WEAPONS.batter);
+  G.weaponOf = (p) => G.weaponsFor(p.position).find((w) => w.id === p.weapon) || null;
+
+  const applyWeapon = (p, weaponId) => {
+    const w = G.weaponsFor(p.position).find((x) => x.id === weaponId);
+    if (!w) return;
+    p.weapon = w.id;
+    const target = G.isPitcher(p) ? p.pitcher : p.batter;
+    for (const k in w.ab) {
+      if (k === 'velocity') target.velocity = G.clamp(target.velocity + w.ab[k], 125, 160);
+      else target[k] = G.clamp(target[k] + w.ab[k], 1, 100);
+    }
+    if (w.skill && !p.skills.includes(w.skill)) p.skills.push(w.skill);
+    if (w.pitches) {
+      for (const pt of p.pitcher.pitches) pt.level = Math.min(G.MAX_PITCH_LEVEL || 7, pt.level + 1);
+      const extra = G.PITCH_TYPES.find((t) => !p.pitcher.pitches.some((x) => x.id === t.id));
+      if (extra) p.pitcher.pitches.push({ id: extra.id, level: 2 });
+    }
+  };
+
   G.createPlayer = (opt) => {
     const bg = G.BACKGROUNDS.find((b) => b.id === opt.background);
     const hand = G.HANDS.find((h) => h.id === opt.hand);
@@ -86,6 +128,7 @@
       for (const k in b) b[k] = G.clamp(b[k], 1, 100);
       p.batter = b;
     }
+    if (opt.weapon) applyWeapon(p, opt.weapon);
     return p;
   };
 

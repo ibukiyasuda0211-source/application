@@ -1461,3 +1461,30 @@ h3 {
   background: #fff7e0;
   color: #8a6d00;
 }
+
+/* ---------- 選手名（苗字・名前）と武器 ---------- */
+.name-row {
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.name-part {
+  display: grid;
+  gap: 2px;
+  flex: 1 1 120px;
+  min-width: 0;
+}
+.name-part small {
+  color: var(--muted);
+  font-weight: 700;
+}
+.name-part input {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 2px solid var(--line);
+  background: #fff;
+}
+.tag.weapon {
+  background: #fff1d6;
+  color: #a55b00;
+}

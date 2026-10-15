@@ -7,7 +7,9 @@
   const br = (t) => esc(t).replace(/\n/g, '<br>');
 
   const defaultCreate = () => ({
-    name: G.randomMaleName(),
+    family: G.pick(G.SURNAMES),
+    given: G.pick(G.MALE_NAMES),
+    weapon: 'hitter',
     position: 'SS',
     hand: 'RR',
     background: 'hs',
@@ -73,10 +75,14 @@
     const hands = c.position === 'P' ? G.HANDS.filter((h) => h.id !== 'RS') : G.HANDS;
     return `<div class="topbar"><div class="date">新しい選手をつくる</div><div class="spacer"></div><button class="btn sub" data-act="totitle">もどる</button></div>
     <div class="create"><div class="panel">
-      <div class="field"><label class="lbl" for="pname">選手名</label>
-        <div class="name-row"><input id="pname" maxlength="12" value="${esc(c.name)}" autocomplete="off" />
-        <button class="btn sub small" data-act="randname">ランダム</button></div></div>
+      <div class="field"><span class="lbl">選手名</span>
+        <div class="name-row">
+          <label class="name-part"><small>苗字</small><input id="pfamily" maxlength="6" value="${esc(c.family)}" autocomplete="off" placeholder="例：山田" /></label>
+          <label class="name-part"><small>名前</small><input id="pgiven" maxlength="6" value="${esc(c.given)}" autocomplete="off" placeholder="例：太郎" /></label>
+          <button class="btn sub small" data-act="randname">ランダム</button></div>
+        <small class="muted">ファンやメディアからは苗字で呼ばれます。</small></div>
       <div class="field"><span class="lbl">ポジション</span>${choiceGroup('position', G.POSITIONS, c.position)}</div>
+      <div class="field"><span class="lbl">武器（特徴）</span><small class="muted" style="display:block;margin:-2px 0 6px">選手としての一番の売り。初期能力や特殊能力に反映されます。</small>${choiceGroup('weapon', G.weaponsFor(c.position), c.weapon)}</div>
       <div class="field"><span class="lbl">投打</span>${choiceGroup('hand', hands, c.hand)}</div>
       <div class="field"><span class="lbl">経歴</span>${choiceGroup(
         'background',
@@ -173,6 +179,7 @@
       <div class="tags">
         <span class="tag ${p.squad}">${G.squadName(p)}</span>
         ${p.squad === 'first' || G.isPitcher(p) ? `<span class="tag">${G.roleName(p)}</span>` : ''}
+        ${G.weaponOf(p) ? `<span class="tag weapon">武器：${G.weaponOf(p).name}</span>` : ''}
         <span class="tag">${growth.name}</span>
         ${p.injury ? `<span class="tag injury">故障中：${esc(p.injury.name)}（残り${p.injury.weeks}週）</span>` : ''}
       </div>
@@ -991,18 +998,23 @@
       const [k, v] = arg.split(':');
       ui.create[k] = v;
       if (k === 'position' && v === 'P' && ui.create.hand === 'RS') ui.create.hand = 'RR';
+      // 投手と野手で選べる武器が違うので、切り替えたら合うものに戻す
+      if (k === 'position' && !G.weaponsFor(v).some((w) => w.id === ui.create.weapon)) ui.create.weapon = G.weaponsFor(v)[v === 'P' ? 0 : 1].id;
       render();
     },
     randname: () => {
-      ui.create.name = G.randomMaleName();
+      ui.create.family = G.pick(G.SURNAMES);
+      ui.create.given = G.pick(G.MALE_NAMES);
       render();
     },
     start: () => {
-      const name = ui.create.name.trim();
-      if (!name) {
-        toast('選手名を入力してください');
+      const family = (ui.create.family || '').trim().replace(/\s+/g, '');
+      const given = (ui.create.given || '').trim().replace(/\s+/g, '');
+      if (!family || !given) {
+        toast(!family ? '苗字を入力してください' : '名前を入力してください');
         return;
       }
+      const name = `${family} ${given}`;
       ui.s = G.newGame({ ...ui.create, name }, ui.slot);
       ui.tab = 'action';
       ui.screen = 'game';
@@ -1213,7 +1225,8 @@
   });
 
   document.addEventListener('input', (e) => {
-    if (e.target.id === 'pname') ui.create.name = e.target.value;
+    if (e.target.id === 'pfamily') ui.create.family = e.target.value;
+    if (e.target.id === 'pgiven') ui.create.given = e.target.value;
   });
 
   render();

@@ -129,6 +129,33 @@
       else if (me > r.war + 3) add(1, 1, `同期の中では${fam}が一番出世したよね`);
     }
 
+    // 武器（特徴）についての投稿。今の調子と食い違わないように書き分ける
+    const wp = G.weaponOf && G.weaponOf(p);
+    if (wp && !s.retired && p.squad === 'first') {
+      const fv = pitcher ? null : u.form.slice(-10).reduce((a, x) => G.addStats(a, x), G.emptyBat());
+      const cold = fv && fv.pa >= 15 && G.batDerived(fv).ops < 0.55;
+      const lines = {
+        power: [`${fam}のパワーは規格外。打球音が違う`, `${fam}、売りのパワーが鳴りを潜めてる…`],
+        hitter: [`${fam}のバットコントロールは芸術的`, `安打製造機の${fam}が、最近ヒットが出ない`],
+        speed: [`${fam}が塁に出ると何か起こる`, `${fam}、足を生かすにはまず出塁しないと`],
+        arm: [`${fam}の強肩、見てて気持ちいい`, `${fam}の肩は一級品なんだけどな`],
+        glove: [`${fam}の守備範囲、ほんとに広い`, `守備は一流の${fam}、打撃がもう少しあれば`],
+        eye: [`${fam}、ボール球に全然手を出さない`, `出塁が売りの${fam}が出塁できてない`],
+        clutch: [`チャンスで${fam}に回ると期待しかない`, `チャンスに強いはずの${fam}が今は苦しんでる`],
+        all: [`${fam}は何でもできるのが強み`, `${fam}、器用貧乏にならないでほしい`],
+        fastball: [`${fam}の直球、打者が完全に振り遅れてる`],
+        control: [`${fam}の制球力、ストライクゾーンの四隅に全部決まる`],
+        breaking: [`${fam}の変化球、魔球すぎる`],
+        stamina: [`${fam}は最後まで球威が落ちない`],
+        strikeout: [`${fam}の奪三振ショー、見応えあった`],
+        heart: [`ピンチの${fam}、なんであんなに落ち着いてるの`],
+      }[wp.id];
+      if (lines) {
+        if (cold && lines[1]) add(-1, 1, lines[1]);
+        else add(1, 1, lines[0]);
+      }
+    }
+
     // チームの状況についての投稿
     if (!s.retired && s.week >= G.SEASON_START && s.week <= G.SEASON_END) {
       const rank = G.leagueRanking(s, team.league).findIndex((r) => r.id === p.teamId) + 1;
