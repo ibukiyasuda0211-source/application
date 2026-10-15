@@ -75,7 +75,8 @@
       const L = s.leaders;
       if (!pitcher && L && s.stats.bat.pa >= 150) {
         const st = s.stats.bat;
-        if (st.ab && st.h / st.ab >= L.avg.final - 0.01) add(1, 2, `${fam}、首位打者あるぞこれ`, `今年の${fam}は本物。打率${G.fmtRate(st.h, st.ab)}`);
+        const qualified = st.pa >= 3.1 * Math.max(1, G.teamGamesPlayed(s)) * 0.95;
+        if (qualified && st.ab && st.h / st.ab >= L.avg.final - 0.01) add(1, 2, `${fam}、首位打者あるぞこれ`, `今年の${fam}は本物。打率${G.fmtRate(st.h, st.ab)}`);
         if (st.hr >= 20) add(1, 2, `${fam}もう${st.hr}本塁打か！`, `${fam}のホームラン、今年何本いくんだろ`);
       }
       if (pitcher && s.stats.pit.w >= 10) add(1, 2, `${fam}もう${s.stats.pit.w}勝！エースの風格`);
@@ -87,6 +88,7 @@
 
     // 話題になった出来事
     for (const b of recentBuzz) {
+      const today = nowW - b.w <= 0 ? '今日の' : nowW - b.w === 1 ? 'この前の' : '少し前の';
       const t = {
         promote: () => add(1, 3, `${fam}昇格きた！待ってた！`, `${fam}一軍！今日から球場行くわ`),
         demote: () => add(-1, 3, `${fam}抹消か…下で頑張れ`, `${fam}、今の状態じゃ仕方ない`, `${fam}を落とすのは早すぎない？`),
@@ -112,9 +114,9 @@
           add(1, 4, `${fam}メジャー挑戦！日本から応援してる`, `${fam}がメジャーか…寂しいけど誇らしい`);
           add(1, 2, `${fam} is the real deal. Welcome to the big leagues!`, `Can't wait to see ${fam} at our ballpark!`);
         },
-        hotgame: () => add(1, 3, `今日の${fam}、${b.text}`, `${fam}、${b.text}。ヒーローインタビュー最高だった`),
-        error: () => add(-1, 3, `${fam}のエラーで負けた…`, `今日は${fam}の守備に泣かされた`),
-        fine: () => add(1, 3, `今日の${fam}のファインプレー、何回でも見られる`, `${fam}の守備で試合が締まった`),
+        hotgame: () => add(1, 3, `${today}${fam}、${b.text}は最高だった`, `${fam}の${b.text}、ヒーローインタビューまで最高だった`),
+        error: () => add(-1, 3, `${today}試合、${fam}のエラーが痛かった…`, `${today}試合は${fam}の守備に泣かされた`),
+        fine: () => add(1, 3, `${today}${fam}のファインプレー、何回でも見られる`, `${today}試合、${fam}の守備で締まった`),
       }[b.type];
       if (t) t();
     }

@@ -263,7 +263,7 @@
     if (own.kind === 'bat') {
       const o = G.OPP_PITCHERS.find((x) => x.id === own.oppP.type);
       const us = G.usageSummary(s);
-      scout = `<div class="scout"><b>${own.starter ? `今日は「${own.order}」でスタメン出場` : 'ベンチスタート（代打で出番があるかも）'}</b>
+      scout = `<div class="scout"><b>${own.starter ? `今日は「${own.order}」でスタメン出場` : own.defOnly ? 'ベンチスタート（終盤の守備固めで出番がありそう）' : 'ベンチスタート（代打で出番がありそう）'}</b>
         ${us ? `<div class="muted">${esc(us.detail)}${us.mood ? `・${esc(us.mood)}` : ''}</div>` : ''}
         <div>相手先発：${esc(own.oppP.name)}（<b>${o.name}</b>）</div><div class="muted">スコアラー「${o.hint}」</div></div>`;
     } else {
@@ -287,7 +287,8 @@
     const r = s.gw.last;
     const mark = r.outcome === 'W' ? '勝利' : r.outcome === 'L' ? '敗戦' : '引き分け';
     const ap = G.approachById(s.player, r.ap);
-    const read = r.match === 'good' ? '<div class="read good">読みが当たった！ 作戦がハマった。</div>' : r.match === 'bad' ? '<div class="read bad">相手の思うつぼだった…。作戦が裏目に出た。</div>' : '';
+    const review = G.planReview(s, r);
+    const read = review ? `<div class="read ${review.cls}">${esc(review.text)}</div>` : '';
     let detail;
     if (r.kind === 'bat') {
       const plays = (r.plays || []).map((t) => `<li class="${/失策|捕逸/.test(t) ? 'pa-bad' : 'pa-HR'}"><span>守備</span>${esc(t)}</li>`).join('');

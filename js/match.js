@@ -48,6 +48,73 @@
 
   G.levelOffset = (s) => (s.player.league === 'mlb' ? -6 : 0);
 
+  // 試合内容の出来（good / ok / bad）
+  G.judgeGame = (res) => {
+    const l = res.line;
+    if (res.kind === 'bat') {
+      if (!l.pa) return res.fld && res.fld.e ? 'bad' : res.fld && res.fld.fine ? 'good' : 'ok';
+      const tb = l.h + l.d + 2 * l.t + 3 * l.hr;
+      if (l.hr || l.h >= 2 || (l.h >= 1 && (l.bb || l.rbi >= 2)) || tb + l.bb >= Math.max(2, l.pa - 2)) return 'good';
+      if (l.h === 0 && l.bb === 0) return 'bad';
+      if (l.pa >= 4 && l.h === 0 && l.k >= 2) return 'bad';
+      return 'ok';
+    }
+    if (res.kind === 'pit') {
+      if (l.gs) {
+        if (l.outs >= 18 && l.r <= 2) return 'good';
+        if (l.r >= 5 || (l.outs < 15 && l.r >= 3)) return 'bad';
+        return 'ok';
+      }
+      if (l.r === 0) return 'good';
+      if (res.blown || l.l || l.r >= 2) return 'bad';
+      return 'ok';
+    }
+    return 'ok';
+  };
+
+  // 作戦の振り返り。相性と実際の結果の両方を見て、言っていることと結果が食い違わないようにする
+  G.planReview = (s, res) => {
+    const g = G.judgeGame(res);
+    const l = res.line;
+    const ap = res.ap;
+    if (res.kind === 'bat' && !l.pa) return null;
+    // 作戦そのものの手応え
+    let note = '';
+    if (res.kind === 'bat') {
+      if (ap === 'power' && l.hr) note = '狙い通りの一発！';
+      else if (ap === 'power' && l.k >= 2) note = '強振が空回りしてしまった。';
+      else if (ap === 'contact' && l.k >= 2) note = '当てにいったのに三振…。';
+      else if (ap === 'contact' && l.h && !l.k) note = 'しっかりバットに当てられた。';
+      else if (ap === 'patient' && l.bb) note = 'じっくり見て四球をもぎ取った。';
+      else if (ap === 'patient' && l.k >= 2) note = '見すぎて追い込まれてしまった。';
+      else if (ap === 'aggressive' && l.h && !l.k) note = '積極的に振って結果を出した。';
+      else if (ap === 'speed' && l.sb) note = '足で相手をかき回した！';
+    } else if (res.kind === 'pit') {
+      if (ap === 'power' && l.k >= (l.gs ? 7 : 2)) note = '直球で押し込めた。';
+      else if (ap === 'power' && l.hr) note = '力勝負の直球を一発された…。';
+      else if (ap === 'low' && !l.hr && l.r <= 1) note = '低めに集めて長打を許さなかった。';
+      else if (ap === 'low' && l.bb >= 3) note = '低めを意識しすぎて四球が増えた。';
+      else if (ap === 'tempo' && l.gs && l.outs >= 21) note = 'テンポよく長いイニングを投げられた。';
+    }
+    let cls;
+    let text;
+    if (res.match === 'good') {
+      if (g === 'good') [cls, text] = ['good', '読みが当たった！ 作戦がハマった。'];
+      else if (g === 'ok') [cls, text] = ['neutral', '狙いは悪くなかった。あと一本が出れば…。'];
+      else [cls, text] = ['neutral', '作戦の方向性は合っていたが、相手が一枚上手だった。'];
+    } else if (res.match === 'bad') {
+      if (g === 'good') [cls, text] = ['good', '作戦は裏目だったが、実力でねじ伏せた！'];
+      else if (g === 'ok') [cls, text] = ['neutral', '相手にうまく対応された。作戦を見直したい。'];
+      else [cls, text] = ['bad', '相手の思うつぼだった…。作戦が裏目に出た。'];
+    } else {
+      if (g === 'good') [cls, text] = ['good', '自分のバッティングができた。'];
+      else if (g === 'bad') [cls, text] = ['bad', '今日は相手が上だった。'];
+      else return note ? { cls: 'neutral', text: note } : null;
+      if (res.kind === 'pit') text = g === 'good' ? '自分の投球ができた。' : '今日は打たれてしまった。';
+    }
+    return { cls, text: note ? `${text}${note}` : text };
+  };
+
   const mergeMods = (...list) => {
     const out = {};
     for (const m of list) for (const k in m) out[k] = (out[k] === undefined ? 1 : out[k]) * m[k];
@@ -228,7 +295,14 @@
         res.line = st;
         res.innings = inns;
         res.startInning = Number((ctx.situation.match(/^(\d)回/) || [0, 9])[1]);
-        score = G.scoreline(outcome === 'W', outcome === 'D');
+        // スコアは「登板した場面」と「自分の失点」に合わせる
+        const base = G.ri(1, 5);
+        if (outcome === 'W') {
+          const margin = Math.max(1, lead - st.r);
+          score = [base + margin + st.r, base + st.r];
+        } else if (outcome === 'D') score = [base + st.r, base + st.r];
+        else if (ctx.pre === 'W') score = [base + lead, base + lead + Math.max(1, st.r - lead)];
+        else score = [base, base + Math.max(1, G.ri(1, 4)) + st.r];
       }
     }
 

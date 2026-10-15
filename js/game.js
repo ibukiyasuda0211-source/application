@@ -548,7 +548,14 @@
     let text = `クライマックスシリーズが行われた。\n`;
     if (win) {
       text += `${G.teamById(p.teamId).name}が勝ち抜き、日本シリーズ進出を決めた！`;
-      if (me) text += `\n${p.name}も${G.isPitcher(p) ? '好投' : '勝負強いバッティング'}でチームに貢献した！`;
+      if (me) {
+        // 今季の実際の働きに合わせた一言
+        const war = G.seasonWAR(p, s);
+        const starter = G.isPitcher(p) ? s.stats.pit.outs >= 90 : p.usage && p.usage.status === 'starter';
+        if (starter && war >= 2) text += `\n${p.name}も${G.isPitcher(p) ? '好投' : '勝負強いバッティング'}でチームに貢献した！`;
+        else if (starter) text += `\n${p.name}もグラウンドに立ち、短期決戦の重圧を肌で感じた。`;
+        else text += `\n${p.name}はベンチから声を張り上げ、チームを後押しした。`;
+      }
     } else {
       text += 'チームは惜しくも敗退してしまった…。';
     }
@@ -576,7 +583,8 @@
       if (me) {
         s.titles.push({ year: s.year, name: '日本一' });
         p.popularity = G.clamp(p.popularity + 5, 0, 100);
-        if (G.chance(0.15 + Math.max(0, G.seasonWAR(p, s)) * 0.03)) {
+        const regular = G.isPitcher(p) ? s.stats.pit.outs >= 90 : p.usage && p.usage.status === 'starter';
+        if (regular && G.chance(0.1 + Math.max(0, G.seasonWAR(p, s)) * 0.03)) {
           s.titles.push({ year: s.year, name: '日本シリーズMVP' });
           text += `\n\nさらに${p.name}が日本シリーズMVPに選ばれた！`;
         }

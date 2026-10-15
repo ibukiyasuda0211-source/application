@@ -188,8 +188,22 @@
     {
       id: 'rival_news',
       weight: 4,
+      // ライバルの実際の立場（投手か野手か、1軍か2軍か）に合った話題にする
+      cond: (s) => {
+        const d = s.draft && s.draft.picks.find((x) => x.id === s.draft.rivalId);
+        return !d || !d.retired;
+      },
       title: 'ライバルの活躍',
-      text: (s) => `同期入団のライバル・${rival(s)}が${G.pick(['猛打賞', '初ホームラン', '完封勝利', 'サヨナラ打', '雑誌の表紙'])}で話題になっている。`,
+      text: (s) => {
+        const d = s.draft && s.draft.picks.find((x) => x.id === s.draft.rivalId);
+        const pitcher = d ? d.pos === 'P' : false;
+        const farm = d && /2軍|マイナー/.test(d.status);
+        let what;
+        if (farm) what = pitcher ? '2軍で好投を続けていること' : '2軍で打ちまくっていること';
+        else if (!inSeason(s)) what = G.pick(['自主トレでの猛特訓', '雑誌の表紙', 'テレビ出演']);
+        else what = pitcher ? G.pick(['完封勝利', '2桁奪三振', '見事なセーブ']) : G.pick(['猛打賞', 'サヨナラ打', '決勝ホームラン']);
+        return `同期入団のライバル・${rival(s)}が、${what}で話題になっている。`;
+      },
       choices: [
         { label: '負けていられない！', run: (s) => '闘志に火がついた！' + G.applyFx(s, { exp: { mind: 10, muscle: 8 }, stamina: -8 }) },
         { label: '素直に祝福する', run: (s) => `${rival(s)}に祝福のメッセージを送った。` + G.applyFx(s, { exp: { mind: 12 } }) },
@@ -246,7 +260,7 @@
     {
       id: 'dorm_food',
       weight: 4,
-      cond: (s) => P(s).age <= 23,
+      cond: (s) => P(s).age <= 23 && P(s).home === 'dorm',
       title: '寮の食事',
       text: () => '寮のおばちゃん「若いんだからいっぱい食べなさい！」山盛りのどんぶりが出てきた。',
       run: (s) => '完食した！' + G.applyFx(s, { exp: { muscle: 12 }, stamina: 10 }),
@@ -338,7 +352,15 @@
     {
       id: 'reporter_bad',
       weight: 3,
-      cond: (s) => inSeason(s) && P(s).squad === 'first' && P(s).condition <= 1,
+      cond: (s) => {
+        if (!inSeason(s) || P(s).squad !== 'first') return false;
+        if (isP(s)) {
+          const v = G.pitcherView(s);
+          return v.formERA !== null && v.formERA >= 5;
+        }
+        const v = G.batterView(s);
+        return v.formOPS !== null && v.formOPS < 0.55;
+      },
       title: '辛口記事',
       text: () => 'スポーツ新聞に「期待外れ」と厳しい見出しが躍った…。',
       choices: [

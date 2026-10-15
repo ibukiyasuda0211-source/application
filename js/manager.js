@@ -209,7 +209,9 @@
     const u = p.usage;
     const v = G.batterView(s);
     const bar = v.bar;
-    const formTxt = v.formPA >= 15 ? `直近${Math.min(FORM_GAMES, u.form.length)}試合 打率${fmt(v.formAvg)}` : '';
+    const dec = sumBat(u.form.slice(-DECIDE_GAMES));
+    const decN = Math.min(DECIDE_GAMES, u.form.length);
+    const formTxt = dec.pa >= 15 ? `直近${decN}試合 打率${fmt(dec.ab ? dec.h / dec.ab : 0)}・OPS ${fmt(G.batDerived(dec).ops)}` : '';
 
     if (u.status === 'bench') {
       u.benchGames++;
@@ -283,8 +285,17 @@
       u.slot = next;
       u.sinceChange = 0;
       u.lowered = false;
-      const up = next < from && !(from <= 2 && next > 2);
-      usageLog(s, `打順が${from}番から${next}番に${next < from ? '上がった' : '変わった'}${formTxt ? `（${formTxt}）` : ''}`, up ? 'good' : 'event');
+      // 打順が上がるのは「評価が上がった」とき、下がるのは「評価が下がった」とき。理由もそれに合わせて書く
+      const tierRank = { top: 1, heart: 0, mid: 2, bottom: 3 };
+      const better = tierRank[tier(next)] < tierRank[tier(from)];
+      const why = better
+        ? v.decideOPS !== null && v.decideOPS >= 0.8
+          ? `好調を買われて（${formTxt}）`
+          : `今季の安定した成績が評価されて（今季OPS ${fmt(v.seasonOPS)}）`
+        : formTxt
+          ? `状態が上がらず（${formTxt}）`
+          : '打線の組み替えで';
+      usageLog(s, `${why}、打順が${from}番から${next}番に${better ? '上がった' : '下がった'}`, better ? 'good' : 'event');
     }
   };
 
