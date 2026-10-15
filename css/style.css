@@ -1488,3 +1488,69 @@ h3 {
   background: #fff1d6;
   color: #a55b00;
 }
+
+/* ---------- スコアボード ---------- */
+.game-date {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--muted);
+}
+.box-wrap {
+  overflow-x: auto;
+}
+.boxscore {
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  background: #1f3d26;
+  color: #f4f8ef;
+  border-radius: 10px;
+  overflow: hidden;
+  font-size: 14px;
+  min-width: 100%;
+}
+.boxscore th,
+.boxscore td {
+  padding: 6px 7px;
+  text-align: center;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+.boxscore th {
+  font-size: 11px;
+  color: #b9d3b5;
+  font-weight: 700;
+}
+.boxscore td.run {
+  color: #ffe27a;
+  font-weight: 800;
+}
+.boxscore .tot {
+  background: rgba(255, 255, 255, 0.08);
+  font-weight: 800;
+}
+.boxscore tr.me td.tname {
+  box-shadow: inset 3px 0 0 #ffb400;
+}
+.boxscore .team-chip {
+  border-color: rgba(255, 255, 255, 0.4);
+}
+.box-foot {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.games-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+.game-row {
+  font-size: 13px;
+  border-bottom: 1px dashed var(--line);
+  padding-bottom: 6px;
+}
+.game-row summary {
+  cursor: pointer;
+}
+.game-row .boxscore {
+  margin-top: 6px;
+}

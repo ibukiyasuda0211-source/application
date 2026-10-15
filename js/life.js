@@ -76,7 +76,7 @@
 
   // ---------- ヘルパー ----------
   G.absWeek = (s) => s.year * 52 + s.week;
-  G.isOffseason = (s) => s.week <= 4 || s.week >= 41;
+  G.isOffseason = (s) => ['jan', 'fall', 'off'].includes(G.phaseOf(s.week, s.year).id);
 
   G.heroines = (s) => Object.values(s.people).filter((x) => x.group === 'love');
   G.partner = (s) => G.heroines(s).find((h) => ['lover', 'fiance', 'married'].includes(h.stage)) || null;
@@ -163,6 +163,15 @@
     }
     if (G.ensureTeams) G.ensureTeams(s);
     if (!s.stats.fld) s.stats.fld = G.emptyFld();
+    // 旧バージョンで週の途中にセーブしていた場合は、実際の日程に合わせ直す
+    if (s.gw && !s.gw.days) {
+      s.gw.days = G.daysInWeek(s.week, s.year).slice();
+      s.gw.n = s.gw.days.length;
+      s.gw.d = Math.min(s.gw.d, s.gw.n);
+      s.gw.cur = null;
+      s.gw.await = false;
+      s.gw.last = null;
+    }
     if (!s.draft && G.genDraftClass) G.genDraftClass(s);
     delete p.married;
     delete p.girlfriend;
@@ -224,6 +233,11 @@
     {
       id: 'coach', place: 'people', name: (s) => `${s.people.coach.name}に相談`, desc: '首脳陣の評価が少し上がる',
       run: (s) => '練習方法について相談した。' + fx(s, { aff: { coach: 5 }, trust: 2, exp: { technique: 4 } }),
+    },
+    {
+      id: 'posconsult', place: 'people', name: 'コーチにポジション変更を相談', desc: '守備位置・役割の変更を願い出る',
+      req: (s) => G.canConsultPosition(s),
+      run: (s) => G.startPositionConsult(s),
     },
     {
       id: 'friend', place: 'people', name: (s) => `親友の${s.people.friend.name}と電話`, desc: '地元の親友と語り合う',

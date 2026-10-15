@@ -74,7 +74,7 @@
   const senpai = (s) => s.npc.senpai;
   const rival = (s) => s.npc.rival;
   const coach = (s) => s.npc.coach;
-  const inSeason = (s) => s.week >= G.SEASON_START && s.week <= G.SEASON_END;
+  const inSeason = (s) => s.week >= G.cal(s.year).startW && s.week <= G.cal(s.year).endW;
 
   G.EVENTS = [
     {
@@ -287,7 +287,7 @@
     {
       id: 'star_training',
       weight: 5,
-      cond: (s) => s.week <= 4 || s.week >= 45,
+      cond: (s) => G.isOffseason(s),
       title: '合同自主トレ',
       text: (s) => `球界を代表するスター選手から「一緒に自主トレしないか？」と誘われた！`,
       choices: [

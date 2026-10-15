@@ -261,9 +261,11 @@
           else if (G.chance(0.5)) {
             ours++;
             outcome = 'W';
+            res.extra = true;
           } else {
             theirs++;
             outcome = 'L';
+            res.extra = true;
           }
         } else outcome = ours > theirs ? 'W' : 'L';
         if (outcome === 'W' && st.outs >= 15 && st.r < ours && G.chance(0.82)) st.w = 1;
@@ -316,28 +318,200 @@
     return res;
   };
 
+  // ---------- スコアボード ----------
+  // 合計を各イニングにランダムに振り分ける
+  const spread = (total, from, to, arr) => {
+    for (let i = 0; i < total; i++) {
+      const k = G.ri(from, to);
+      arr[k - 1] = (arr[k - 1] || 0) + 1;
+    }
+  };
+
+  // 試合結果（スコア・自分の投球・登板した場面）と矛盾しないイニングスコアをつくる
+  G.buildBox = (s, res, ctx) => {
+    const p = s.player;
+    const [ours, theirs] = res.score;
+    let n = 9;
+    const our = new Array(12).fill(0);
+    const opp = new Array(12).fill(0);
+    let decided = false;
+    if (res.kind === 'pit' && ctx.role === 'SP') {
+      const inns = res.innings || [];
+      inns.forEach((r, i) => (opp[i] = r));
+      const rest = Math.max(0, theirs - inns.reduce((a, b) => a + b, 0));
+      if (res.extra) {
+        n = 10;
+        const winnerOurs = res.outcome === 'W';
+        spread(winnerOurs ? ours - 1 : ours, 1, 9, our);
+        spread(winnerOurs ? rest : rest - 1, Math.min(9, inns.length + 1), 9, opp);
+        if (winnerOurs) our[9] = 1;
+        else opp[9] = 1;
+        decided = true;
+      } else {
+        spread(ours, 1, 9, our);
+        spread(rest, Math.min(9, inns.length + 1), 9, opp);
+        decided = true;
+      }
+    } else if (res.kind === 'pit') {
+      // 救援：登板した回は自分の失点。登板時点の点差を合わせる
+      const k = Math.min(9, res.startInning || 9);
+      const r = res.line.r;
+      const lead = ctx.pre === 'W' ? ctx.lead : ctx.pre === 'D' ? 0 : -G.ri(1, 3);
+      let tb = Math.max(0, Math.min(theirs - r, ours - lead));
+      if (lead < 0) tb = Math.max(tb, -lead);
+      const ob = tb + lead;
+      if (ob >= 0 && tb >= 0 && ob <= ours && tb + r <= theirs) {
+        spread(ob, 1, k - 1 || 1, our);
+        spread(tb, 1, k - 1 || 1, opp);
+        opp[k - 1] += r;
+        const oa = ours - ob;
+        const ta = theirs - tb - r;
+        if (k >= 9 && (oa || ta)) {
+          n = 10;
+          spread(oa, 10, 10, our);
+          spread(ta, 10, 10, opp);
+        } else {
+          spread(oa, k, 9, our);
+          spread(ta, Math.min(9, k + 1), 9, opp);
+        }
+        decided = true;
+      }
+    }
+    if (!decided) {
+      spread(ours, 1, 9, our);
+      spread(theirs, 1, 9, opp);
+    }
+    if (res.outcome === 'D' && n === 9) n = 12; // 引き分けは延長12回まで
+    // 自分の投球で決まっているイニング（ここの得点は動かせない）
+    let oppLocked = 0;
+    let ourFrom = 0;
+    if (res.kind === 'pit' && ctx.role === 'SP') oppLocked = (res.innings || []).length;
+    else if (res.kind === 'pit' && decided) {
+      oppLocked = Math.min(9, res.startInning || 9);
+      ourFrom = oppLocked - 1;
+    }
+    // ホームチームが最終回の表の時点で勝っていれば、裏は「X」。裏の得点は前の回へ移す
+    const settle = (home) => {
+      const homeArr = home ? our : opp;
+      const awayR = home ? theirs : ours;
+      const homeR = home ? ours : theirs;
+      if (homeR <= awayR) return { ok: true, last: homeArr[n - 1] };
+      const before = homeArr.slice(0, n - 1).reduce((a, b) => a + b, 0);
+      if (before <= awayR) return { ok: true, last: `${homeArr[n - 1]}x` }; // サヨナラ
+      if (!homeArr[n - 1]) return { ok: true, last: 'X' };
+      const lo = home ? ourFrom : oppLocked;
+      if (lo > n - 2) return { ok: false };
+      homeArr[G.ri(lo, n - 2)] += homeArr[n - 1];
+      homeArr[n - 1] = 0;
+      return { ok: true, last: 'X' };
+    };
+    let home = ctx.home;
+    let st = settle(home);
+    if (!st.ok) {
+      home = !home;
+      st = settle(home);
+    }
+    const homeArr = home ? our : opp;
+    const awayArr = home ? opp : our;
+    const homeR = home ? ours : theirs;
+    const awayR = home ? theirs : ours;
+    const lastHome = st.ok ? st.last : homeArr[n - 1];
+    const ourH = Math.max(ours + G.ri(2, 6), res.line && res.kind === 'bat' ? res.line.h + G.ri(3, 7) : 0);
+    const theirH = Math.max(theirs + G.ri(2, 6), res.line && res.kind === 'pit' ? res.line.h : 0);
+    const ourE = (res.fld ? res.fld.e : 0) + (G.chance(0.2) ? 1 : 0);
+    const theirE = G.chance(0.3) ? 1 : 0;
+    // 責任投手
+    const roster = G.ensureRoster(s).players;
+    const mate = (role) => {
+      const list = roster.filter((m) => m.pos === 'P' && (role ? m.role === role : m.role !== 'farm'));
+      return list.length ? G.pick(list).name : G.randomMaleName();
+    };
+    const me = p.name;
+    const line = res.kind === 'pit' ? res.line : {};
+    let w;
+    let l;
+    let sv = null;
+    if (res.outcome === 'W') {
+      w = line.w ? me : mate(G.chance(0.6) ? 'SP' : null);
+      l = G.randomMaleName();
+      if (line.s) sv = me;
+      else if (ours - theirs <= 3 && G.chance(0.65)) sv = mate('CL');
+      if (sv === w) sv = null;
+    } else if (res.outcome === 'L') {
+      l = line.l ? me : mate(G.chance(0.6) ? 'SP' : null);
+      w = G.randomMaleName();
+      if (theirs - ours <= 3 && G.chance(0.6)) sv = G.randomMaleName();
+    }
+    // 本塁打（自分の分は通算何号かも）
+    const hrs = [];
+    if (res.kind === 'bat' && res.pas) {
+      let num = s.stats.bat.hr;
+      for (const pa of res.pas)
+        if (pa.code === 'HR') {
+          num++;
+          hrs.push(`${me} ${num}号（${['', 'ソロ', '2ラン', '3ラン', '満塁'][Math.min(4, pa.rbi)]}）`);
+        }
+    }
+    const lines = (arr, R) => arr.slice(0, n).map((x) => x);
+    const awayLine = lines(awayArr);
+    const homeLine = lines(homeArr);
+    homeLine[n - 1] = lastHome;
+    return {
+      n,
+      home,
+      oppId: res.oppId,
+      away: { id: home ? res.oppId : p.teamId, line: awayLine, R: awayR, H: home ? theirH : ourH, E: home ? theirE : ourE },
+      homeT: { id: home ? p.teamId : res.oppId, line: homeLine, R: homeR, H: home ? ourH : theirH, E: home ? ourE : theirE },
+      w,
+      l,
+      sv,
+      hrs,
+    };
+  };
+
   // ---------- 1日分（全試合）の準備と実行 ----------
   const prepareDay = (s) => {
     const p = s.player;
+    const gw = s.gw;
+    const day = gw.days[gw.d];
+    if (day.rain) {
+      gw.cur = { rain: true, day };
+      return;
+    }
     const pairs = {};
     let own = null;
-    for (const lg of G.LEAGUES) {
-      const ids = G.shuffle(G.TEAMS.filter((t) => t.league === lg.id).map((t) => t.id));
-      pairs[lg.id] = [];
-      for (let i = 0; i + 1 < ids.length; i += 2) {
-        const a = ids[i];
-        const b = ids[i + 1];
-        if (a === p.teamId || b === p.teamId) own = G.prepareOwnGame(s, a === p.teamId ? b : a);
-        else pairs[lg.id].push([a, b]);
-      }
+    const addPair = (lgId, a, b) => {
+      if (a === p.teamId || b === p.teamId) {
+        own = G.prepareOwnGame(s, a === p.teamId ? b : a);
+        own.home = G.chance(0.5);
+        own.inter = !!day.inter;
+      } else (pairs[lgId] = pairs[lgId] || []).push([a, b]);
+    };
+    const npb = G.LEAGUES.filter((lg) => !lg.mlb);
+    if (day.inter && npb.length === 2) {
+      // 交流戦：セとパのように、別リーグのチームと対戦
+      const A = G.shuffle(G.TEAMS.filter((t) => t.league === npb[0].id).map((t) => t.id));
+      const B = G.shuffle(G.TEAMS.filter((t) => t.league === npb[1].id).map((t) => t.id));
+      A.forEach((a, i) => addPair('inter', a, B[i]));
     }
-    s.gw.cur = { pairs, own };
+    for (const lg of G.LEAGUES) {
+      if (day.inter && !lg.mlb) continue;
+      const ids = G.shuffle(G.TEAMS.filter((t) => t.league === lg.id).map((t) => t.id));
+      for (let i = 0; i + 1 < ids.length; i += 2) addPair(lg.id, ids[i], ids[i + 1]);
+    }
+    gw.cur = { pairs, own, day };
   };
 
   const executeDay = (s, apId) => {
     const p = s.player;
     const gw = s.gw;
-    const { pairs, own } = gw.cur;
+    const { pairs, own, day } = gw.cur;
+    if (gw.cur.rain) {
+      gw.games.push({ rain: true, date: day.d });
+      gw.d++;
+      gw.cur = null;
+      return null;
+    }
     for (const lg in pairs) {
       for (const [a, b] of pairs[lg]) {
         const o = G.playNpcGame(s, a, b);
@@ -347,8 +521,12 @@
     }
     let res = null;
     s.dayCount = (s.dayCount || 0) + 1;
+    gw.played = (gw.played || 0) + 1;
     if (own) {
       res = G.executeOwnGame(s, own, apId);
+      res.date = day.d;
+      res.inter = !!day.inter;
+      res.box = G.buildBox(s, res, own);
       G.recordResult(s, p.teamId, res.outcome);
       G.recordResult(s, own.oppId, G.flip(res.outcome));
       gw.games.push(res);
@@ -381,10 +559,12 @@
 
   // ---------- 1週間の試合の進行 ----------
   G.startGames = (s) => {
-    const n = G.gamesInWeek(s.week);
+    const days = G.daysInWeek(s.week, s.year).slice();
     s.gw = {
-      n,
+      n: days.length,
+      days,
       d: 0,
+      played: 0,
       cur: null,
       last: null,
       await: false,
@@ -402,7 +582,7 @@
     gw.last = null;
     while (gw.d < gw.n) {
       if (!gw.cur) prepareDay(s);
-      const needs = interactive(s) && gw.cur.own && gw.cur.own.kind;
+      const needs = interactive(s) && !gw.cur.rain && gw.cur.own && gw.cur.own.kind;
       if (needs && !apId) {
         gw.await = true;
         return;
@@ -429,9 +609,15 @@
     G.finishGames(s);
   };
 
+  // 週の試合（スコアボードつき）を、次の週に振り返れるように残す
+  const keepWeek = (s, gw) => {
+    s.lastGames = gw.games.map((g) => (g.rain ? { rain: true, date: g.date } : { date: g.date, outcome: g.outcome, score: g.score, oppId: g.oppId, inter: g.inter, box: g.box, kind: g.kind, text: g.kind === 'bat' ? G.batLineText(g.line) : g.kind === 'pit' ? G.pitLineText(g.line) : '出場なし' }));
+  };
+
   G.finishGames = (s) => {
     const gw = s.gw;
     s.gw = null;
+    keepWeek(s, gw);
     G.endWeek(s, gw);
   };
 
@@ -444,6 +630,7 @@
       executeDay(s, G.defaultApproach(s));
     }
     s.gw = null;
+    keepWeek(s, gw);
     return gw;
   };
 })();

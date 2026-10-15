@@ -129,7 +129,46 @@
       p.batter = b;
     }
     if (opt.weapon) applyWeapon(p, opt.weapon);
+    // 投手は最初に希望の役割を決める（先発はスタミナ、リリーフは球威寄り）
+    if (p.pitcher) {
+      p.prefRole = opt.prefRole || 'SP';
+      const adj = { SP: { stamina: 8 }, RP: { stamina: -6, velocity: 1, control: 2 }, CL: { stamina: -10, velocity: 2, control: 2 } }[p.prefRole];
+      for (const k in adj) p.pitcher[k] = k === 'velocity' ? G.clamp(p.pitcher[k] + adj[k], 125, 160) : G.clamp(p.pitcher[k] + adj[k], 1, 100);
+    }
     return p;
+  };
+
+  G.PREF_ROLES = [
+    { id: 'SP', name: '先発', desc: '試合をつくる。スタミナが少し高め' },
+    { id: 'RP', name: '中継ぎ', desc: '試合の流れを守る。球威・制球が少し高め' },
+    { id: 'CL', name: '抑え', desc: '9回を締める守護神。球威重視でスタミナは低め' },
+  ];
+
+  // 守備位置ごとの適性（0〜100）
+  G.posFit = (p, pos) => {
+    const b = p.batter;
+    switch (pos) {
+      case 'C': return b.catching * 0.45 + b.arm * 0.4 + b.fielding * 0.15;
+      case 'SS': return b.fielding * 0.45 + b.arm * 0.3 + b.speed * 0.25;
+      case '2B': return b.fielding * 0.5 + b.speed * 0.25 + b.catching * 0.25;
+      case '3B': return b.arm * 0.4 + b.fielding * 0.4 + b.catching * 0.2;
+      case '1B': return Math.min(100, b.catching * 0.5 + b.fielding * 0.2 + 30);
+      default: return b.speed * 0.4 + b.arm * 0.35 + b.fielding * 0.25;
+    }
+  };
+  G.FIELD_POSITIONS = ['C', '1B', '2B', '3B', 'SS', 'OF'];
+
+  G.applyPositionChange = (s, pos) => {
+    const p = s.player;
+    p.position = pos;
+    p.posAdapt = 0;
+    const u = G.ensureUsage(s);
+    u.status = 'bench';
+    u.slot = null;
+    u.form = [];
+    u.benchGames = 0;
+    u.trial = 0;
+    if (G.newSeasonBars) G.newSeasonBars(s);
   };
 
   // 投手の総合力（被打率・防御率の元になる値）

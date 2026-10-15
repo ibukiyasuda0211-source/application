@@ -116,6 +116,7 @@
         },
         hotgame: () => add(1, 3, `${today}${fam}、${b.text}は最高だった`, `${fam}の${b.text}、ヒーローインタビューまで最高だった`),
         error: () => add(-1, 3, `${today}試合、${fam}のエラーが痛かった…`, `${today}試合は${fam}の守備に泣かされた`),
+        poschange: () => add(0, 3, `${fam}が${b.pos}にコンバートか。どうなるか楽しみ`, `${fam}の${b.pos}、まだぎこちないけど期待してる`, `${fam}を${b.pos}で使うのは賛否あるだろうな`),
         fine: () => add(1, 3, `${today}${fam}のファインプレー、何回でも見られる`, `${today}試合、${fam}の守備で締まった`),
       }[b.type];
       if (t) t();
@@ -157,7 +158,7 @@
     }
 
     // チームの状況についての投稿
-    if (!s.retired && s.week >= G.SEASON_START && s.week <= G.SEASON_END) {
+    if (!s.retired && s.week >= G.cal(s.year).startW && s.week <= G.cal(s.year).endW) {
       const rank = G.leagueRanking(s, team.league).findIndex((r) => r.id === p.teamId) + 1;
       if (rank === 1) add(1, 1, `首位の${team.short}、${fam}の存在が大きい`, `今年の${team.short}は優勝あるぞ`);
       else if (rank >= 5) add(-1, 1, `${team.short}弱すぎ…${fam}一人じゃどうにもならん`, `${rank}位か…今年の${team.short}は厳しい`);

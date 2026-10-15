@@ -26,9 +26,11 @@
     const d = G.POS_DEF[p.position] || G.POS_DEF.OF;
     const f = G.emptyFld();
     f.g = 1;
-    const skill = (b.fielding + b.catching) / 2;
+    // 新しいポジションに慣れるまでは守備力が落ちる（40試合ほどで慣れる）
+    const adaptPenalty = p.posAdapt !== undefined && p.posAdapt < 40 ? (40 - p.posAdapt) * 0.4 : 0;
+    const skill = (b.fielding + b.catching) / 2 - adaptPenalty;
     const range = 0.85 + b.fielding * 0.003;
-    const errMul = G.clamp(1.6 - b.catching * 0.011, 0.45, 1.6) * (p.skills.includes('glove') ? 0.75 : 1);
+    const errMul = G.clamp(1.6 - (b.catching - adaptPenalty) * 0.011, 0.45, 1.8) * (p.skills.includes('glove') ? 0.75 : 1);
     const po = G.poisson(d.po * frac * (p.position === 'C' || p.position === '1B' ? 1 : range));
     const a = G.poisson(d.a * frac * range * (p.position === 'OF' ? 0.5 + b.arm * 0.012 : 1));
     let e = 0;

@@ -158,29 +158,28 @@
   ];
 
   // 1年の流れ（週番号 1〜52）
-  G.MONTH_START = [1, 5, 9, 13, 18, 22, 26, 31, 35, 39, 44, 48];
-  G.SEASON_START = 13;
-  G.SEASON_END = 38;
   G.SEASON_GAMES = 143;
 
-  G.phaseOf = (week) => {
-    if (week <= 4) return { id: 'jan', name: '自主トレ期間' };
-    if (week <= 8) return { id: 'camp', name: '春季キャンプ' };
-    if (week <= 12) return { id: 'open', name: 'オープン戦' };
-    if (week <= 38) return { id: 'season', name: 'ペナントレース' };
-    if (week <= 40) return { id: 'post', name: 'ポストシーズン' };
-    if (week <= 44) return { id: 'fall', name: '秋季キャンプ' };
+  // 年間の流れは calendar.js の実際の日程から決まる（year を渡す）
+  G.phaseOf = (week, year) => {
+    const c = G.cal(year);
+    if (week < c.campW) return { id: 'jan', name: '自主トレ期間' };
+    if (week < c.openW) return { id: 'camp', name: '春季キャンプ' };
+    if (week < c.startW) return { id: 'open', name: 'オープン戦' };
+    if (week <= c.endW) return { id: 'season', name: week >= c.interW[0] && week <= c.interW[1] ? '交流戦' : 'ペナントレース' };
+    if (week <= c.jsW) return { id: 'post', name: 'ポストシーズン' };
+    if (week <= c.fallEndW) return { id: 'fall', name: '秋季キャンプ' };
     return { id: 'off', name: 'オフシーズン' };
   };
 
-  G.monthOf = (week) => {
-    let m = 1;
-    for (let i = 0; i < 12; i++) if (week >= G.MONTH_START[i]) m = i + 1;
-    return { month: m, weekInMonth: week - G.MONTH_START[m - 1] + 1 };
+  G.monthOf = (week, year) => {
+    const d = G.dateOfWeek(year, week, 3);
+    return { month: d.getUTCMonth() + 1, weekInMonth: Math.ceil(d.getUTCDate() / 7) };
   };
 
-  G.gamesInWeek = (week) => {
-    if (week < G.SEASON_START || week > G.SEASON_END) return 0;
-    return (week - G.SEASON_START) % 2 === 0 ? 6 : 5;
+  // その週に予定されている試合数（雨天中止になる日も含む）
+  G.gamesInWeek = (week, year) => {
+    if (G.phaseOf(week, year).id !== 'season') return 0;
+    return G.daysInWeek(week, year).length;
   };
 })();

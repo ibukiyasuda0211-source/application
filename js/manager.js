@@ -151,7 +151,25 @@
     const bar = s.flags.barERA;
     const st = p.pitcher.stamina;
     const established = G.careerOuts(s) >= 900;
-    if (st >= 55 && exp <= bar + 0.3) p.role = 'SP';
+    const pref = p.prefRole;
+    const rpRank = () => (exp <= bar - 0.6 ? 'setup' : exp <= bar + 0.4 ? 'mid' : 'mop');
+    if (pref === 'SP') {
+      // 先発希望：スタミナがあれば先発で起用（力不足ならまずはロングリリーフ）
+      if (st >= 45 && exp <= bar + 0.6) p.role = 'SP';
+      else {
+        p.role = 'RP';
+        p.rpRank = rpRank();
+      }
+    } else if (pref === 'RP') {
+      p.role = 'RP';
+      p.rpRank = rpRank();
+    } else if (pref === 'CL') {
+      if (exp <= bar - 0.6 || (established && exp <= bar - 0.3)) p.role = 'CL';
+      else {
+        p.role = 'RP';
+        p.rpRank = exp <= bar - 0.2 ? 'setup' : rpRank();
+      }
+    } else if (st >= 55 && exp <= bar + 0.3) p.role = 'SP';
     else if (established && exp <= bar - 1.0) p.role = 'CL';
     else {
       p.role = 'RP';
@@ -193,6 +211,7 @@
       G.refreshTrust(s);
       return;
     }
+    if (res && res.fld && p.posAdapt !== undefined && p.posAdapt < 40) p.posAdapt++;
     if (res && res.kind === 'bat') {
       const l = res.line;
       u.form.push({ g: 1, pa: l.pa, ab: l.ab, h: l.h, d: l.d, t: l.t, hr: l.hr, bb: l.bb, k: l.k, fe: res.fld ? res.fld.e : 0, ffine: res.fld ? res.fld.fine : 0 });
@@ -359,7 +378,7 @@
     const p = s.player;
     const u = G.ensureUsage(s);
     if (p.squad !== 'second' || p.injury || s.retired) return false;
-    if (s.week >= G.SEASON_END || s.dayCount < (s.flags.downUntil || 0)) return false;
+    if (s.week >= G.cal(s.year).endW || s.dayCount < (s.flags.downUntil || 0)) return false;
     let ready = false;
     let note = '';
     if (G.isPitcher(p)) {

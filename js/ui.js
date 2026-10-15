@@ -10,6 +10,7 @@
     family: G.pick(G.SURNAMES),
     given: G.pick(G.MALE_NAMES),
     weapon: 'hitter',
+    prefRole: 'SP',
     position: 'SS',
     hand: 'RR',
     background: 'hs',
@@ -35,9 +36,9 @@
     const p = s.player;
     const team = G.teamById(p.teamId);
     if (s.ended) return `<b>${esc(p.name)}</b><div class="muted">引退済み（${s.ending.age}歳・${esc(s.ending.title)}）</div>`;
-    const m = G.monthOf(s.week);
-    if (s.after) return `<b>${esc(p.name)}</b><div class="muted">引退後・${esc(G.afterRank(s))}・${p.age}歳／${s.year}年${m.month}月</div>`;
-    return `<b>${esc(p.name)}</b><div class="muted">${team.short}・${G.positionName(p)}・${p.age}歳／${s.year}年${m.month}月・プロ${p.yearsPro + 1}年目</div>`;
+    const when = `${s.year}年${G.fmtDate(G.dateOfWeek(s.year, s.week, 0), false)}`;
+    if (s.after) return `<b>${esc(p.name)}</b><div class="muted">引退後・${esc(G.afterRank(s))}・${p.age}歳／${when}</div>`;
+    return `<b>${esc(p.name)}</b><div class="muted">${team.short}・${G.positionName(p)}・${p.age}歳／${when}・プロ${p.yearsPro + 1}年目</div>`;
   };
 
   const titleView = () => {
@@ -83,6 +84,7 @@
         <small class="muted">ファンやメディアからは苗字で呼ばれます。</small></div>
       <div class="field"><span class="lbl">ポジション</span>${choiceGroup('position', G.POSITIONS, c.position)}</div>
       <div class="field"><span class="lbl">武器（特徴）</span><small class="muted" style="display:block;margin:-2px 0 6px">選手としての一番の売り。初期能力や特殊能力に反映されます。</small>${choiceGroup('weapon', G.weaponsFor(c.position), c.weapon)}</div>
+      ${c.position === 'P' ? `<div class="field"><span class="lbl">希望の役割</span><small class="muted" style="display:block;margin:-2px 0 6px">先発・中継ぎ・抑えのどれで勝負するか。後からコーチに相談して変えることもできます。</small>${choiceGroup('prefRole', G.PREF_ROLES, c.prefRole || 'SP')}</div>` : ''}
       <div class="field"><span class="lbl">投打</span>${choiceGroup('hand', hands, c.hand)}</div>
       <div class="field"><span class="lbl">経歴</span>${choiceGroup(
         'background',
@@ -158,7 +160,7 @@
     const u = G.usageSummary(s);
     if (!u) {
       const p = s.player;
-      if (p.squad === 'second' && !s.retired && G.phaseOf(s.week).id === 'season' && s.dayCount < (s.flags.downUntil || 0)) {
+      if (p.squad === 'second' && !s.retired && G.phaseOf(s.week, s.year).id === 'season' && s.dayCount < (s.flags.downUntil || 0)) {
         return `<div class="usage"><b>登録抹消中</b><small>再登録まであと${s.flags.downUntil - s.dayCount}試合日</small></div>`;
       }
       return '';
@@ -180,6 +182,8 @@
         <span class="tag ${p.squad}">${G.squadName(p)}</span>
         ${p.squad === 'first' || G.isPitcher(p) ? `<span class="tag">${G.roleName(p)}</span>` : ''}
         ${G.weaponOf(p) ? `<span class="tag weapon">武器：${G.weaponOf(p).name}</span>` : ''}
+        ${G.isPitcher(p) && p.prefRole ? `<span class="tag">希望：${G.PREF_ROLES.find((r) => r.id === p.prefRole).name}</span>` : ''}
+        ${!G.isPitcher(p) && p.posAdapt !== undefined && p.posAdapt < 40 ? `<span class="tag injury" style="background:#e3b600">新ポジション慣熟中 ${p.posAdapt}/40試合</span>` : ''}
         <span class="tag">${growth.name}</span>
         ${p.injury ? `<span class="tag injury">故障中：${esc(p.injury.name)}（残り${p.injury.weeks}週）</span>` : ''}
       </div>
@@ -238,8 +242,7 @@
     }
     return `<div class="log">${groups
       .map((g) => {
-        const m = G.monthOf(g.w);
-        return `<div class="log-week"><h4>${g.y}年 ${m.month}月 第${m.weekInMonth}週</h4>${g.items
+        return `<div class="log-week"><h4>${g.y}年 ${G.weekLabel(g.y, g.w)}</h4>${g.items
           .map((l) => `<div class="log-item ${l.cls || ''}">${br(l.text)}</div>`)
           .join('')}</div>`;
       })
@@ -259,8 +262,38 @@
   const gameMeta = (s, own) => {
     const opp = G.teamById(own.oppId);
     const r = s.standings[s.player.teamId];
-    return `<div class="game-head"><span class="team-chip" style="background:${G.teamById(s.player.teamId).color}">${G.teamById(s.player.teamId).short}</span> vs <span class="team-chip" style="background:${opp.color}">${opp.short}</span>
-      <span class="muted">${opp.name}・今週 ${s.gw.d + 1}/${s.gw.n}試合目・チーム ${r.w}勝${r.l}敗${r.d}分</span></div>`;
+    const day = s.gw.cur && s.gw.cur.day;
+    return `<div class="game-date">${day ? G.fmtDate(day.d) : ''} 18:00 試合開始・${own.home ? 'ホーム' : 'ビジター'}${own.inter ? '・交流戦' : ''}${day && day.makeup ? '・振替試合' : ''}</div>
+      <div class="game-head"><span class="team-chip" style="background:${G.teamById(s.player.teamId).color}">${G.teamById(s.player.teamId).short}</span> vs <span class="team-chip" style="background:${opp.color}">${opp.short}</span>
+      <span class="muted">${opp.name}・チーム ${r.w}勝${r.l}敗${r.d}分</span></div>`;
+  };
+
+  // スコアボード
+  const boxHtml = (b) => {
+    if (!b) return '';
+    const head = Array.from({ length: b.n }, (_, i) => `<th>${i + 1}</th>`).join('');
+    const row = (side, isHome) => {
+      const t = G.teamById(side.id);
+      const me = side.id === ui.s.player.teamId;
+      return `<tr class="${me ? 'me' : ''}"><td class="tname"><span class="team-chip" style="background:${t.color}">${t.short}</span></td>${side.line
+        .map((x) => `<td class="${x !== 0 && x !== 'X' ? 'run' : ''}">${x}</td>`)
+        .join('')}<td class="tot">${side.R}</td><td>${side.H}</td><td>${side.E}</td></tr>`;
+    };
+    const pitchers = [b.w && `勝：${esc(b.w)}`, b.l && `負：${esc(b.l)}`, b.sv && `S：${esc(b.sv)}`].filter(Boolean).join('　');
+    return `<div class="box-wrap"><table class="boxscore"><tr><th></th>${head}<th class="tot">計</th><th>安</th><th>失</th></tr>${row(b.away, false)}${row(b.homeT, true)}</table></div>
+      ${pitchers || b.hrs.length ? `<div class="box-foot">${pitchers}${b.hrs.length ? `<br>本塁打：${b.hrs.map(esc).join('、')}` : ''}</div>` : ''}`;
+  };
+
+  const lastGamesView = (s) => {
+    const list = s.lastGames || [];
+    if (!list.length) return '';
+    return `<details class="settings" open><summary>先週の試合（スコアボード）</summary><div class="games-list">${list
+      .map((g) => {
+        if (g.rain) return `<div class="game-row muted">${G.fmtDate(g.date)}　雨天中止（後日振替）</div>`;
+        const mark = g.outcome === 'W' ? '○' : g.outcome === 'L' ? '●' : '△';
+        return `<details class="game-row"><summary><b class="res-${g.outcome}">${mark}</b> ${G.fmtDate(g.date)} vs ${G.teamById(g.oppId).short}${g.inter ? '（交流戦）' : ''} <b>${g.score[0]}-${g.score[1]}</b>　<span class="muted">${esc(g.text)}</span></summary>${boxHtml(g.box)}</details>`;
+      })
+      .join('')}</div></details>`;
   };
 
   const pregameView = (s) => {
@@ -312,7 +345,9 @@
     const acc = s.gw.acc;
     const week = r.kind === 'bat' ? `今週の成績：${G.batLineText(acc.weekBat)}` : `今週の成績：${G.pitLineText(acc.weekPit)}`;
     return `<div class="panel game-panel">
+      <div class="game-date">${G.fmtDate(r.date)}${r.inter ? '・交流戦' : ''}</div>
       <div class="game-head"><b class="res-${r.outcome}">${mark}</b> ${r.score[0]} - ${r.score[1]} <span class="muted">vs ${G.teamById(r.oppId).name}・作戦「${ap.name}」</span></div>
+      ${boxHtml(r.box)}
       ${read}${detail}
       <div class="muted" style="font-size:13px">${week}</div>
       <div class="act-foot mt"><span></span><span class="btns-row"><button class="btn sub small" data-act="autoGames">残りはおまかせ</button>
@@ -370,11 +405,14 @@
     if (s.gw && s.gw.await) return pregameView(s);
     const { train, priv } = syncSelection(s);
     const mul = G.trainingMultiplier(s);
-    const phase = G.phaseOf(s.week);
+    const phase = G.phaseOf(s.week, s.year);
     const p = s.player;
-    const games = G.gamesInWeek(s.week);
+    const games = G.gamesInWeek(s.week, s.year);
     let note = '';
-    if (games) note = `今週は${games}試合（${G.squadName(p)}）`;
+    if (games) {
+      const days = G.daysInWeek(s.week, s.year);
+      note = `今週は${games}試合（${days.map((d) => G.fmtDate(d.d).replace(/^\d+月/, '')).join('・')}）・${G.squadName(p)}`;
+    } else if (phase.id === 'season') note = '今週は試合なし（オールスター休み・調整期間）';
     else if (phase.id === 'open') note = '今週はオープン戦';
     const cond = G.CONDITIONS[p.condition];
     const quick = `<div class="quick"><span class="cond ${cond.cls}"><span class="arrow">${cond.icon}</span>${cond.name}</span>
@@ -415,6 +453,7 @@
       </div>
       <div class="act-foot"><span class="muted" style="font-size:13px">${note}</span>
         <button class="btn sub small" data-act="auto">おまかせで4週進める</button></div>
+      ${lastGamesView(s)}
       ${gameSettings(s)}
       ${logView(s)}
     </div>`;
@@ -845,8 +884,8 @@
     const s = ui.s;
     const p = s.player;
     const team = G.teamById(p.teamId);
-    const m = G.monthOf(s.week);
-    const phase = G.phaseOf(s.week);
+    const m = G.monthOf(s.week, s.year);
+    const phase = G.phaseOf(s.week, s.year);
     let body;
     if (ui.tab === 'upgrade') body = upgradeTab(s);
     else if (ui.tab === 'stats') body = statsTab(s);
@@ -858,7 +897,7 @@
     else if (ui.tab === 'draft') body = draftTab(s);
     else body = actionTab(s);
     return `<header class="topbar">
-        <div class="date">${s.year}年 ${m.month}月 第${m.weekInMonth}週${s.after ? '' : `<span class="phase">${phase.name}</span>`}</div>
+        <div class="date">${s.year}年 ${G.weekLabel(s.year, s.week)}${s.after ? '' : `<span class="phase">${phase.name}</span>`}</div>
         <div class="team"><span class="team-chip" style="background:${team.color}">${team.short}</span>${team.name}</div>
         <div class="spacer"></div>
         <button class="btn sub" data-act="quit">タイトルへ</button>
@@ -973,6 +1012,8 @@
       const s = G.loadAll()[Number(arg)];
       if (!s) return;
       G.migrate(s);
+      // 週の試合の途中で中断していたら、次に判断が必要なところまで進める
+      if (s.gw && !s.gw.await && !s.gw.last) G.stepGames(s, null);
       s.slot = Number(arg);
       ui.s = s;
       ui.tab = 'action';

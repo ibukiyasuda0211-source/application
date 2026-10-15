@@ -141,8 +141,8 @@
     p.money += G.afterIncome(s);
     p.stamina = G.clamp(p.stamina + 10, 0, 100);
     // 球界は動きつづける
-    if (s.week >= G.SEASON_START && s.week <= G.SEASON_END) G.simLeagueWeek(s);
-    if (s.week === G.SEASON_END) G.afterSeasonEnd(s);
+    if (s.week >= G.cal(s.year).startW && s.week <= G.cal(s.year).endW) G.simLeagueWeek(s);
+    if (s.week === G.cal(s.year).endW) G.afterSeasonEnd(s);
     G.weeklyLife(s);
     if (!s.queue.some((q) => q.kind !== 'info') && G.chance(0.15)) {
       const ev = G.pick(G.AFTER_EVENTS.filter((e) => !e.cond || e.cond(s)));
@@ -153,7 +153,7 @@
   };
 
   G.simLeagueWeek = (s) => {
-    const n = G.gamesInWeek(s.week);
+    const n = G.gamesInWeek(s.week, s.year);
     const boost = s.after && s.after.career === 'coach' ? s.after.level + 1 : 0;
     for (let d = 0; d < n; d++) {
       for (const lg of G.LEAGUES) {

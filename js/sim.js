@@ -221,7 +221,8 @@
     const p = s.player;
     if (G.isPitcher(p)) {
       s.farmRotation = (s.farmRotation || 0) + 1;
-      if (p.pitcher.stamina >= 45 && s.farmRotation % 6 === 0) {
+      const farmStarter = p.prefRole ? p.prefRole === 'SP' : p.pitcher.stamina >= 45;
+      if (farmStarter && s.farmRotation % 6 === 0) {
         const inn = G.clamp(4 + p.pitcher.stamina * 0.045 + G.gauss(0, 0.8), 3, 9);
         const st = G.simPitching(p, inn, 6, { starter: true });
         st.gs = 1;
@@ -229,7 +230,7 @@
         else if (st.r >= 4 && G.chance(0.6)) st.l = 1;
         return { kind: 'pit', line: st };
       }
-      if (p.pitcher.stamina < 45 && G.chance(0.45)) {
+      if (!farmStarter && G.chance(0.45)) {
         const st = G.simPitching(p, 1, 6);
         return { kind: 'pit', line: st };
       }
