@@ -14,7 +14,7 @@
     growth: 'random',
   });
 
-  const ui = { screen: 'title', tab: 'action', s: null, create: defaultCreate(), slot: 0, confirm: null };
+  const ui = { screen: 'title', tab: 'action', s: null, create: defaultCreate(), slot: 0, confirm: null, sel: { train: null, priv: 'relax' }, place: 'home' };
 
   let toastTimer = null;
   const toast = (msg) => {
@@ -147,6 +147,7 @@
         ${bar('体力', p.stamina, staminaColor(p.stamina))}
         ${bar('首脳陣評価', p.trust, '#3b8ee0')}
         ${bar('人気', p.popularity, '#ff8a1f')}
+        ${bar('充実度', p.happy, '#e0569b')}
       </div>
       <div class="money"><div><small>所持金</small><b>${G.fmtMoney(p.money)}</b></div><div><small>年俸</small><b>${G.fmtMoney(p.salary)}</b></div></div>
       ${abilityRows(p)}
@@ -166,8 +167,9 @@
     { id: 'upgrade', name: '能力アップ' },
     { id: 'stats', name: '成績' },
     { id: 'standings', name: '順位表' },
-    { id: 'shop', name: 'ショップ' },
+    { id: 'people', name: '人間関係' },
     { id: 'life', name: '人生' },
+    { id: 'shop', name: 'ショップ' },
   ];
 
   const tabsView = (s) =>
@@ -200,29 +202,61 @@
       .join('')}</div>`;
   };
 
+  // 今週の選択をそろえる（選べなくなった選択肢は既定に戻す）
+  const syncSelection = (s) => {
+    const train = G.trainingOptions(s);
+    if (!train.some((t) => t.id === ui.sel.train)) ui.sel.train = (train.find((t) => !t.risky && !t.rest) || train[0]).id;
+    const priv = G.privateActions(s);
+    if (!priv.some((a) => a.id === ui.sel.priv && a.ok)) ui.sel.priv = 'relax';
+    return { train, priv };
+  };
+
   const actionTab = (s) => {
-    const acts = G.availableActions(s);
+    const { train, priv } = syncSelection(s);
     const mul = G.trainingMultiplier(s);
     const phase = G.phaseOf(s.week);
-    const train = acts.filter((a) => a.group === 'train');
-    const rest = acts.filter((a) => a.group === 'rest');
-    const btn = (a) =>
-      `<button class="act ${a.group} ${a.risky ? 'risky' : ''}" data-act="do" data-arg="${a.id}"><b>${esc(a.name)}</b><small>${esc(a.desc)}</small></button>`;
+    const p = s.player;
     const games = G.gamesInWeek(s.week);
     let note = '';
-    if (games) note = `今週は${games}試合（${s.player.squad === 'first' ? '1軍' : '2軍'}）`;
+    if (games) note = `今週は${games}試合（${p.squad === 'first' ? '1軍' : '2軍'}）`;
     else if (phase.id === 'open') note = '今週はオープン戦';
-    const p = s.player;
     const cond = G.CONDITIONS[p.condition];
     const quick = `<div class="quick"><span class="cond ${cond.cls}"><span class="arrow">${cond.icon}</span>${cond.name}</span>
       <span>体力 <b style="color:${staminaColor(p.stamina)}">${Math.round(p.stamina)}</b></span>
-      <span>評価 <b>${Math.round(p.trust)}</b></span><span class="tag ${p.squad}">${p.squad === 'first' ? '1軍' : '2軍'}</span>
+      <span>充実度 <b>${Math.round(p.happy)}</b></span>
+      <span>所持金 <b>${G.fmtMoney(p.money)}</b></span><span class="tag ${p.squad}">${p.squad === 'first' ? '1軍' : '2軍'}</span>
       ${p.injury ? `<span class="tag injury">故障 残り${p.injury.weeks}週</span>` : ''}</div>`;
+
+    const trainBtn = (a) =>
+      `<button class="act train ${a.risky ? 'risky' : ''} ${a.rest ? 'restopt' : ''} ${ui.sel.train === a.id ? 'on' : ''}" data-act="selTrain" data-arg="${a.id}" aria-pressed="${ui.sel.train === a.id}"><b>${esc(a.name)}</b><small>${esc(a.desc)}</small></button>`;
+
+    const places = G.PLACES.map((pl) => ({ ...pl, items: priv.filter((a) => a.place === pl.id) })).filter((pl) => pl.items.length);
+    if (!places.some((pl) => pl.id === ui.place)) ui.place = 'home';
+    const special = (a) => a.ok && /^(confess|propose)/.test(a.id);
+    const chips = places
+      .map((pl) => {
+        const hot = pl.items.some(special);
+        const okCount = pl.items.filter((a) => a.ok).length;
+        return `<button class="place ${ui.place === pl.id ? 'on' : ''} ${okCount ? '' : 'dim'}" data-act="place" data-arg="${pl.id}">${pl.name}${hot ? '<span class="dot"></span>' : ''}</button>`;
+      })
+      .join('');
+    const cur = places.find((pl) => pl.id === ui.place);
+    const privBtn = (a) =>
+      `<button class="act rest ${special(a) ? 'special' : ''} ${ui.sel.priv === a.id ? 'on' : ''}" data-act="selPriv" data-arg="${esc(a.id)}" ${a.ok ? '' : 'disabled'} aria-pressed="${ui.sel.priv === a.id}">
+        <b>${esc(a.name)}</b><small>${esc(a.desc)}</small>${a.cost ? `<small class="cost-tag">${G.fmtMoney(a.cost)}</small>` : ''}${a.ok ? '' : `<small class="why">${esc(a.reason)}</small>`}</button>`;
+
+    const selT = train.find((t) => t.id === ui.sel.train);
+    const selP = priv.find((a) => a.id === ui.sel.priv);
     return `<div class="panel">${quick}
-      <div class="section-title">練習 <span class="muted">練習効率 ×${mul.toFixed(2)}（${phase.name}・${G.CONDITIONS[s.player.condition].name}）</span></div>
-      <div class="act-grid">${train.map(btn).join('')}</div>
-      <div class="section-title">休息・プライベート</div>
-      <div class="act-grid">${rest.map(btn).join('')}</div>
+      <div class="section-title"><span class="step">1</span>今週の練習 <span class="muted">練習効率 ×${mul.toFixed(2)}（${phase.name}・${cond.name}）</span></div>
+      <div class="act-grid">${train.map(trainBtn).join('')}</div>
+      <div class="section-title"><span class="step">2</span>オフの過ごし方</div>
+      <div class="places">${chips}</div>
+      <div class="act-grid">${cur.items.map(privBtn).join('')}</div>
+      <div class="week-bar">
+        <div class="week-sum"><span>練習：<b>${esc(selT.name)}</b></span><span>オフ：<b>${esc(selP.name)}</b>${selP.cost ? `（${G.fmtMoney(selP.cost)}）` : ''}</span></div>
+        <button class="btn" data-act="week">この1週間を過ごす ▶</button>
+      </div>
       <div class="act-foot"><span class="muted" style="font-size:13px">${note}</span>
         <button class="btn sub small" data-act="auto">おまかせで4週進める</button></div>
       ${logView(s)}
@@ -396,7 +430,7 @@
     return `<div class="panel"><h3>ショップ <span class="muted" style="font-size:13px">所持金 ${G.fmtMoney(p.money)}</span></h3>
       <p class="muted" style="font-size:13px;margin-top:0">買い物では週は進みません。購入するとすぐに効果が出ます。</p>
       <div class="shop-grid">${G.SHOP_ITEMS.map((it) => {
-        const owned = it.once && ((it.id === 'house' && p.house) || (it.id === 'car' && p.car));
+        const owned = it.once && it.id === 'car' && p.car;
         const trainerActive = it.id === 'trainer' && s.flags.trainerUntil === s.year;
         const ok = !owned && !trainerActive && p.money >= it.price;
         return `<div class="shop-item"><b>${it.name}</b><small class="muted">${it.desc}</small>
@@ -411,30 +445,83 @@
     return [...m.entries()];
   };
 
+  const affBar = (x) => {
+    const v = Math.min(100, x.aff);
+    const color = x.group === 'love' ? '#e0569b' : '#3b8ee0';
+    return `<div class="track"><div class="fill" style="width:${v}%;background:${color}"></div></div>`;
+  };
+
+  const peopleTab = (s) => {
+    const P = s.people;
+    const card = (x, extra = '') => {
+      const stage = x.group === 'love' ? G.STAGE_NAME[x.stage] : '';
+      return `<div class="person ${x.group === 'love' ? 'love' : ''}">
+        <div class="row"><b>${esc(x.name)}</b>${stage ? `<span class="tag ${x.stage}">${stage}</span>` : ''}</div>
+        <small class="muted">${esc(x.role)}${x.retired && x.id === 'rival' ? '（引退）' : ''}</small>
+        <div class="bar aff"><span>${x.group === 'love' ? '好感度' : '親密度'}</span>${affBar(x)}<span class="val">${Math.round(x.aff)}</span></div>${extra}</div>`;
+    };
+    const team = ['senpai', 'rival', 'coach', 'kohai'].map((id) => P[id]).filter((x) => x.met);
+    const rival = P.rival;
+    const rivalNote = `<small class="muted">通算WAR ${rival.war.toFixed(1)}${rival.best ? `・${esc(rival.best)}` : ''}</small>`;
+    const others = ['parents', 'friend', 'reporter'].map((id) => P[id]).filter((x) => x.met);
+    const love = G.heroines(s).filter((h) => h.met);
+    const unmet = G.heroines(s).filter((h) => !h.met).length;
+    const pt = G.partner(s);
+    return `<div class="panel">
+      <h3>チーム</h3><div class="people">${team.map((x) => card(x, x.id === 'rival' ? rivalNote : '')).join('')}</div>
+      <h3 class="mt">家族・友人・仕事</h3><div class="people">${others.map((x) => card(x)).join('')}</div>
+      <h3 class="mt">恋愛</h3>
+      ${love.length ? `<div class="people">${love.map((h) => card(h, s.story[`liked_${h.id}`] || h.dates >= 3 ? `<small class="muted">好み：${esc({ quiet: '落ち着いたデート', active: 'アクティブなデート', luxury: 'おしゃれなディナー', casual: '気軽なデート' }[G.heroineType(h).likes])}</small>` : '')).join('')}</div>` : '<p class="muted">まだ特別な出会いはない。</p>'}
+      ${unmet && !pt ? `<p class="hint">まだ出会っていない人が${unmet}人いる。カフェ、ジム、取材やテレビ出演、地元への帰省で出会えるかも。</p>` : ''}
+      <p class="muted" style="font-size:12px">親密度が上がると、特別なイベントが起こることがある。恋人とは会わない日が続くと好感度が下がっていく。</p>
+    </div>`;
+  };
+
   const lifeTab = (s) => {
     const p = s.player;
     const tc = titleCounts(s.titles);
+    const sp = G.spouse(s);
+    const pt = G.partner(s);
     let family = '';
-    if (p.married) family += `<dt>配偶者</dt><dd>${esc(p.married.name)}（${p.married.year}年 結婚）</dd>`;
-    else if (p.girlfriend) family += `<dt>恋人</dt><dd>${esc(p.girlfriend.name)}（好感度 ${Math.round(p.girlfriend.love)}）</dd>`;
+    if (sp) family += `<dt>配偶者</dt><dd>${esc(sp.name)}（${sp.marriedYear || s.year}年 結婚）</dd>`;
+    else if (pt) family += `<dt>${G.STAGE_NAME[pt.stage]}</dt><dd>${esc(pt.name)}</dd>`;
     else family += '<dt>恋人</dt><dd>いない</dd>';
-    family += `<dt>子供</dt><dd>${p.children}人</dd>`;
+    family += `<dt>子供</dt><dd>${p.kids.length ? p.kids.map((k) => `${esc(k.name)}（${G.kidAge(s, k)}歳${k.baseball ? '・野球' : ''}）`).join('、') : 'いない'}</dd>`;
+    family += `<dt>両親</dt><dd>親密度 ${Math.round(s.people.parents.aff)}</dd>`;
     if (p.dog) family += `<dt>ペット</dt><dd>犬の${esc(p.dog)}</dd>`;
-    if (p.house) family += '<dt>住まい</dt><dd>高級マンション</dd>';
     if (p.car) family += '<dt>愛車</dt><dd>スポーツカー</dd>';
     const team = G.teamById(p.teamId);
+    const home = G.homeById(p.home);
+    const homes = G.HOMES.filter((h) => h.id !== p.home)
+      .map((h) => {
+        let why = '';
+        if (h.id === 'dorm' && (sp || p.age >= 28)) why = '入れない';
+        else if (p.money < h.price) why = 'お金が足りない';
+        return `<div class="shop-item"><b>${h.name}</b><small class="muted">${h.desc}</small><small class="muted">維持費 週${h.weekly}万円・休養+${h.rest}</small>
+          <div class="act-foot"><span class="price">${h.price ? G.fmtMoney(h.price) : '初期費用なし'}</span>
+          <button class="btn small" data-act="move" data-arg="${h.id}" ${why ? 'disabled' : ''}>${why || '引っ越す'}</button></div></div>`;
+      })
+      .join('');
+    const styles = G.LIFESTYLES.map(
+      (l) => `<button class="choice ${p.lifestyle === l.id ? 'on' : ''}" data-act="lifestyle" data-arg="${l.id}">${l.name}<small>${l.desc}</small></button>`,
+    ).join('');
+    const hobby = p.hobby ? `${G.hobbyById(p.hobby).name}（レベル${p.hobbyLv}）：${G.hobbyById(p.hobby).desc}` : 'まだない（「オフの過ごし方」の自宅から始められる）';
     return `<div class="panel">
       <div class="grid2">
         <div><h3>プロフィール</h3><dl class="kv">
           <dt>所属</dt><dd>${team.name}</dd>
           <dt>入団</dt><dd>${s.startYear}年 ドラフト${p.draftRank}位</dd>
           <dt>経歴</dt><dd>${G.BACKGROUNDS.find((b) => b.id === p.background).name}</dd>
-          <dt>ライバル</dt><dd>${esc(s.npc.rival)}</dd>
+          <dt>SNSフォロワー</dt><dd>${Math.round(p.followers).toLocaleString()}人</dd>
           <dt>生涯年収</dt><dd>${G.fmtMoney(s.totalEarnings)}</dd>
         </dl></div>
-        <div><h3>家族・プライベート</h3><dl class="kv">${family}</dl></div>
+        <div><h3>家族</h3><dl class="kv">${family}</dl></div>
       </div>
-      <h3>獲得タイトル・表彰</h3>
+      <h3>住まい <span class="muted" style="font-size:13px">いま：${home.name}</span></h3>
+      <div class="shop-grid">${homes}</div>
+      <h3 class="mt">生活レベル</h3><div class="choices">${styles}</div>
+      <h3 class="mt">趣味</h3><p style="margin:0">${esc(hobby)}</p>
+      <h3 class="mt">獲得タイトル・表彰</h3>
       ${tc.length ? `<div class="titles">${tc.map(([n, c]) => `<span class="trophy">🏆 ${n}${c > 1 ? ` ×${c}` : ''}</span>`).join('')}</div>` : '<p class="muted">まだありません。</p>'}
       <h3 class="mt">年表</h3>
       ${
@@ -459,6 +546,7 @@
       <div class="modal-title">${esc(q.title)}</div>
       ${q.big ? `<div class="big-banner">${esc(q.big)}</div>` : ''}
       <div class="modal-text">${br(q.text)}</div>
+      ${q.input ? `<div class="modal-input"><label for="modalInput">名前</label><input id="modalInput" maxlength="8" value="${esc(q.input)}" autocomplete="off"></div>` : ''}
       <div class="modal-choices">${choices
         .map((c, i) => `<button class="btn ${i > 0 && q.kind !== 'info' ? 'sub' : ''}" data-act="choice" data-arg="${i}">${esc(c)}</button>`)
         .join('')}</div>
@@ -477,6 +565,7 @@
     else if (ui.tab === 'standings') body = standingsTab(s);
     else if (ui.tab === 'shop') body = shopTab(s);
     else if (ui.tab === 'life') body = lifeTab(s);
+    else if (ui.tab === 'people') body = peopleTab(s);
     else body = actionTab(s);
     return `<header class="topbar">
         <div class="date">${s.year}年 ${m.month}月 第${m.weekInMonth}週<span class="phase">${phase.name}</span></div>
@@ -489,6 +578,25 @@
   };
 
   // ================= エンディング =================
+  const familyEpilogue = (s) => {
+    const p = s.player;
+    const sp = G.spouse(s);
+    const kids = p.kids;
+    const ballKid = kids.find((k) => k.baseball && G.kidAge(s, k) >= 10);
+    let t = '';
+    if (sp) t += `${sp.name}と${kids.length ? `${kids.length}人の子供たち` : 'ふたり'}で、穏やかな毎日を送っている。`;
+    else if (kids.length) t += `子供たちの成長を見守るのが、何よりの楽しみだ。`;
+    else t += 'ひとりの時間も、それはそれで悪くない。';
+    if (ballKid) t += `${ballKid.name}は今、本気でプロ野球選手を目指している。`;
+    if (p.hobby && p.hobbyLv >= 25) t += `趣味の${G.hobbyById(p.hobby).name}の腕前は、もはやプロ級だ。`;
+    return t;
+  };
+  const closePeople = (s) => {
+    const close = Object.values(s.people).filter((x) => x.group !== 'love' && x.met && x.aff >= 70);
+    return close.length ? `今も付き合いが続く仲間：${close.map((x) => x.name).join('、')}` : '';
+  };
+
+
   const endingView = () => {
     const s = ui.s;
     const p = s.player;
@@ -521,10 +629,12 @@
         <div class="legend">${esc(e.title)}</div>
         <div class="badges">${e.meikyu ? '<span>🏅 名球会入り</span>' : ''}${e.hall ? '<span>🏛 野球殿堂入り</span>' : ''}</div>
       </div>
+      ${e.life ? `<div class="panel life-score"><div><small class="muted">人生の評価</small><div class="ls-label">${esc(e.life.label)}</div></div>
+        <div class="ls-num">${e.life.score}<small>点</small></div><div class="muted" style="font-size:13px">平均充実度 ${e.life.avgHappy}・${esc(closePeople(s))}</div></div>` : ''}
       <div class="grid2">
         <div class="panel"><h3>通算成績</h3><dl class="kv">${main}<dt>通算WAR</dt><dd>${tot.war.toFixed(1)}</dd><dt>生涯年収</dt><dd>${G.fmtMoney(s.totalEarnings)}</dd></dl></div>
-        <div class="panel"><h3>その後の人生</h3><p>${esc(e.after)}</p>
-          ${p.married ? `<p>${esc(p.married.name)}と${p.children ? `${p.children}人の子供たち` : ''}に囲まれ、幸せに暮らしている。</p>` : ''}
+        <div class="panel"><h3>第二の人生：${esc(e.careerName || '')}</h3><p>${esc(e.after)}</p>
+          <p>${esc(familyEpilogue(s))}</p>
           <h3>タイトル・表彰</h3>${tc.length ? `<div class="titles">${tc.map(([n, c]) => `<span class="trophy">🏆 ${n}${c > 1 ? ` ×${c}` : ''}</span>`).join('')}</div>` : '<p class="muted">なし</p>'}
         </div>
       </div>
@@ -570,6 +680,7 @@
     continue: (arg) => {
       const s = G.loadAll()[Number(arg)];
       if (!s) return;
+      G.migrate(s);
       s.slot = Number(arg);
       ui.s = s;
       ui.tab = 'action';
@@ -618,26 +729,50 @@
       ui.tab = arg;
       render();
     },
-    do: (arg) => {
+    selTrain: (arg) => {
+      ui.sel.train = arg;
+      render();
+    },
+    selPriv: (arg) => {
+      ui.sel.priv = arg;
+      render();
+    },
+    place: (arg) => {
+      ui.place = arg;
+      render();
+    },
+    week: () => {
       if (ui.s.queue.length) return;
-      G.doAction(ui.s, arg);
+      syncSelection(ui.s);
+      G.doAction(ui.s, ui.sel.train, ui.sel.priv);
       afterTurn();
     },
     auto: () => {
       const s = ui.s;
       for (let i = 0; i < 4; i++) {
-        if (s.queue.length || s.ended) break;
+        if (s.queue.length || s.ended || s.retired) break;
         const p = s.player;
-        const acts = G.availableActions(s);
+        const train = G.trainingOptions(s);
         let id;
         if (p.stamina < 45) id = 'rest';
         else {
-          const train = acts.filter((a) => a.group === 'train' && !a.risky);
-          id = train.length ? G.pick(train).id : 'rest';
+          const t = train.filter((a) => !a.risky && !a.rest);
+          id = t.length ? G.pick(t).id : 'rest';
         }
-        G.doAction(s, id);
+        G.doAction(s, id, 'relax');
       }
       afterTurn();
+    },
+    move: (arg) => {
+      if (G.moveHome(ui.s, arg)) toast(`${G.homeById(arg).name}に引っ越した！`);
+      else toast('引っ越せませんでした');
+      save();
+      render();
+    },
+    lifestyle: (arg) => {
+      ui.s.player.lifestyle = arg;
+      save();
+      render();
     },
     raise: (arg) => {
       if (!G.raiseAbility(ui.s.player, arg)) toast('経験点が足りません');
@@ -690,7 +825,10 @@
       const q = s.queue[0];
       if (!q) return;
       if (q.kind === 'info') G.dismissScene(s);
-      else G.resolveScene(s, Number(arg));
+      else {
+        const input = document.getElementById('modalInput');
+        G.resolveScene(s, Number(arg), input ? input.value : undefined);
+      }
       afterTurn();
     },
     retire: () => {

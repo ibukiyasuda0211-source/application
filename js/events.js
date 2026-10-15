@@ -35,9 +35,15 @@
       p.money += fx.money;
       out.push(`所持金${fx.money > 0 ? '+' : ''}${G.fmtMoney(fx.money)}`);
     }
-    if (fx.love && p.girlfriend) {
-      p.girlfriend.love = G.clamp(p.girlfriend.love + fx.love, 0, 150);
-      out.push(`${p.girlfriend.name}の好感度${fx.love > 0 ? 'アップ' : 'ダウン'}`);
+    if (fx.happy) {
+      G.addHappy(s, fx.happy);
+      out.push(`充実度${fx.happy > 0 ? '+' : ''}${fx.happy}`);
+    }
+    if (fx.aff) {
+      for (const id in fx.aff) {
+        const t = G.addAff(s, id, fx.aff[id]);
+        if (t) out.push(t);
+      }
     }
     if (fx.ability) {
       for (const k in fx.ability) {
@@ -171,87 +177,11 @@
       ],
     },
     {
-      id: 'meet_girl',
-      weight: 4,
-      cond: (s) => !P(s).girlfriend && !P(s).married && P(s).age >= 19,
-      title: '運命の出会い？',
-      text: (s) => {
-        s.tmp.girlName = G.pick(G.SURNAMES) + ' ' + G.pick(G.FEMALE_NAMES);
-        const place = G.pick(['行きつけのカフェ', '近所の図書館', '球場近くの花屋', '友人の結婚式', '寮の近くの定食屋']);
-        return `${place}で、${s.tmp.girlName}さんという女性と知り合った。話してみると気が合いそうだ。`;
-      },
-      choices: [
-        {
-          label: '連絡先を聞く',
-          run: (s) => {
-            if (G.chance(0.7)) {
-              P(s).girlfriend = { name: s.tmp.girlName, love: 20, since: s.year };
-              return `${s.tmp.girlName}さんと連絡先を交換した！` + G.applyFx(s, { cond: 1 });
-            }
-            return '「ごめんなさい、そういうのはちょっと…」断られてしまった。' + G.applyFx(s, { cond: -1 });
-          },
-        },
-        { label: '野球に集中する', run: (s) => '今は恋より野球だ！' + G.applyFx(s, { exp: { mind: 10 } }) },
-      ],
-    },
-    {
-      id: 'gf_birthday',
-      weight: 4,
-      cond: (s) => !!P(s).girlfriend,
-      title: '恋人の誕生日',
-      text: (s) => `今日は${P(s).girlfriend.name}さんの誕生日だ。`,
-      choices: [
-        { label: 'プレゼントを贈る', run: (s) => 'とても喜んでくれた！' + G.applyFx(s, { money: -10, love: 20, cond: 1 }) },
-        { label: '練習を優先する', run: (s) => '「…野球と私、どっちが大事なの？」' + G.applyFx(s, { love: -20, exp: { technique: 12 } }) },
-      ],
-    },
-    {
-      id: 'gf_cheer',
-      weight: 3,
-      cond: (s) => !!P(s).girlfriend && inSeason(s),
-      title: '恋人の応援',
-      text: (s) => `${P(s).girlfriend.name}さんが手作りのお守りを渡してくれた。「試合、頑張ってね」`,
-      run: (s) => '心が温かくなった。' + G.applyFx(s, { cond: 1, love: 5 }),
-    },
-    {
-      id: 'propose',
-      weight: 10,
-      cond: (s) => !!P(s).girlfriend && P(s).girlfriend.love >= 100 && !P(s).married,
-      title: 'プロポーズ',
-      text: (s) => `${P(s).girlfriend.name}さんと付き合って、ずいぶん経った。そろそろ将来のことを考えてもいい頃かもしれない…。`,
-      choices: [
-        {
-          label: 'プロポーズする',
-          run: (s) => {
-            const p = P(s);
-            p.married = { name: p.girlfriend.name, year: s.year };
-            p.girlfriend = null;
-            s.history.push({ year: s.year, text: `${p.married.name}さんと結婚` });
-            return `「…はい！喜んで！」${p.married.name}さんと結婚することになった！` + G.applyFx(s, { cond: 2, pop: 3, money: -300 });
-          },
-        },
-        { label: 'まだ早い', run: (s) => 'もう少し今の関係を大切にしよう。' + G.applyFx(s, { love: -10 }) },
-      ],
-    },
-    {
-      id: 'child',
-      weight: 3,
-      cond: (s) => !!P(s).married && s.year > P(s).married.year && P(s).children < 3,
-      title: '家族が増える！',
-      text: (s) => `妻の${P(s).married.name}から嬉しい知らせが…元気な赤ちゃんが生まれた！`,
-      run: (s) => {
-        const p = P(s);
-        p.children++;
-        s.history.push({ year: s.year, text: `第${p.children}子誕生` });
-        return '父親として、もっと頑張らなければ！' + G.applyFx(s, { cond: 2, exp: { mind: 25 } });
-      },
-    },
-    {
       id: 'family_dinner',
       weight: 3,
-      cond: (s) => !!P(s).married,
+      cond: (s) => !!G.spouse(s),
       title: '家族の時間',
-      text: (s) => `${P(s).married.name}が得意料理を作って待っていてくれた。`,
+      text: (s) => `${G.spouse(s).name}が得意料理を作って待っていてくれた。`,
       run: (s) => '家族の支えがあるから頑張れる。' + G.applyFx(s, { stamina: 15, cond: 1 }),
     },
     {

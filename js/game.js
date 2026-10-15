@@ -69,6 +69,7 @@
       totalEarnings: terms.bonus + terms.salary,
     };
     s.startYear = s.year;
+    G.initLife(s);
     for (const t of G.TEAMS) s.teamStr[t.id] = Math.round(G.rf(42, 58));
     G.resetStandings(s);
     G.genLeaders(s);
@@ -89,7 +90,7 @@
     scene(
       s,
       '遊び方',
-      '1週間ごとに行動を選んで、選手を育てよう。\n\n・練習で「経験点」をためて「能力」画面で能力アップ\n・体力が減るとケガをしやすくなる。適度に休養を\n・2軍で結果を出して首脳陣の評価を上げると1軍昇格\n・シーズン中は試合が自動で行われ、成績が記録される\n・オフには契約更改。活躍すれば年俸アップ！\n\nめざせ、名球会！',
+      '毎週「練習」と「オフの過ごし方」をひとつずつ選んで、プロ野球選手としての人生を歩もう。\n\n・練習で「経験点」をためて「能力アップ」で能力を上げる\n・オフは自由。先輩と食事、デート、趣味、帰省、取材…出会いや人間関係が人生を変える\n・体力が減るとケガをしやすく、充実度が下がると調子を崩しやすい\n・2軍で結果を出して首脳陣の評価を上げると1軍昇格\n・シーズン中は試合が自動で行われ、成績が記録される\n・オフには契約更改。活躍すれば年俸アップ！\n・恋愛、結婚、子育て、引っ越し…引退後の人生まで、すべてはあなた次第\n\nめざせ、名球会。そして最高の人生！',
     );
     log(s, `${team.name}にドラフト${rank}位で入団！`, 'good');
     return s;
@@ -138,22 +139,20 @@
   };
 
   // ---------- 行動 ----------
-  G.availableActions = (s) => {
+  // 今週の練習の選択肢
+  G.trainingOptions = (s) => {
     const p = s.player;
     const acts = [];
     const pitcher = G.isPitcher(p);
     if (p.injury) {
-      acts.push({ id: 'rehab', name: 'リハビリ', desc: '回復を早める', group: 'rest' });
-      acts.push({ id: 'mental', name: 'イメトレ', desc: '精神の経験点', group: 'train' });
+      acts.push({ id: 'rehab', name: 'リハビリ', desc: '体力回復・治りが早まる' });
+      acts.push({ id: 'mental', name: 'イメトレ', desc: '精神の経験点' });
     } else {
       for (const t of G.TRAININGS) {
-        if (t.for === 'A' || (t.for === 'P') === pitcher) acts.push({ id: t.id, name: t.name, desc: t.desc, group: 'train', risky: t.risky });
+        if (t.for === 'A' || (t.for === 'P') === pitcher) acts.push({ id: t.id, name: t.name, desc: t.desc, risky: t.risky });
       }
     }
-    acts.push({ id: 'rest', name: '休養', desc: '体力を大きく回復', group: 'rest' });
-    if (!p.injury) acts.push({ id: 'play', name: '遊びに行く', desc: '調子アップ・出会いも？', group: 'rest' });
-    if (p.girlfriend) acts.push({ id: 'date', name: 'デート', desc: `${p.girlfriend.name}さんと`, group: 'rest' });
-    if (p.married) acts.push({ id: 'family', name: '家族サービス', desc: '家族と過ごす', group: 'rest' });
+    acts.push({ id: 'rest', name: '完全休養', desc: '練習を休んで体力回復', rest: true });
     return acts;
   };
 
@@ -176,7 +175,7 @@
       log(s, `${inj.name}で登録抹消…`, 'bad');
     }
     p.condition = Math.max(0, p.condition - 1);
-    s.history.push({ year: s.year, text: `${inj.name}（全治${weeks}週）` });
+    if (weeks >= 3) s.history.push({ year: s.year, text: `${inj.name}（全治${weeks}週）` });
     return p.injury;
   };
 
@@ -206,35 +205,29 @@
     return msg;
   };
 
-  G.doAction = (s, actionId) => {
+  // 1週間 = 練習ひとつ + オフの過ごし方ひとつ
+  G.doAction = (s, trainId, privId) => {
     const p = s.player;
     const results = [];
-    const t = G.trainingById(actionId);
-    if (t) {
+    const t = G.trainingById(trainId);
+    if (t && (!p.injury || trainId === 'mental')) {
       results.push(doTraining(s, t));
-    } else if (actionId === 'rest') {
-      let rec = 40 + (p.house ? 10 : 0) + (p.skills.includes('recover') ? 10 : 0);
-      let msg = 'ゆっくり休んだ。' + G.applyFx(s, { stamina: rec });
-      if (G.chance(0.3)) msg += G.applyFx(s, { cond: 1 });
-      results.push(msg);
-    } else if (actionId === 'rehab') {
-      let msg = 'リハビリに励んだ。' + G.applyFx(s, { stamina: 25 });
+    } else if (trainId === 'rehab') {
+      let msg = 'リハビリに励んだ。' + G.applyFx(s, { stamina: 20 });
       if (p.injury && G.chance(0.5)) {
         p.injury.weeks = Math.max(1, p.injury.weeks - 1);
         msg += '\n回復が早まっている！';
       }
       results.push(msg);
-    } else if (actionId === 'play') {
-      s.flags.playCount = (s.flags.playCount || 0) + 1;
-      const where = G.pick(['カラオケ', 'ボウリング', '映画', '遊園地', 'ゲームセンター', '温泉', '釣り']);
-      let msg = `${where}に行って気分転換した。` + G.applyFx(s, { stamina: 20, money: -3, cond: G.chance(0.7) ? 1 : 0 });
+    } else {
+      const rec = 25 + (p.skills.includes('recover') ? 8 : 0);
+      let msg = '練習を休んで体を休めた。' + G.applyFx(s, { stamina: rec });
+      if (G.chance(0.25)) msg += G.applyFx(s, { cond: 1 });
       results.push(msg);
-      if (!p.girlfriend && !p.married && p.age >= 19 && G.chance(0.25)) s.tmp.forceEvent = 'meet_girl';
-    } else if (actionId === 'date') {
-      const where = G.pick(['水族館', 'イタリアン', '夜景の見える公園', 'ショッピング', '動物園']);
-      results.push(`${p.girlfriend.name}さんと${where}デートをした。` + G.applyFx(s, { love: G.ri(12, 22), cond: 1, stamina: 10, money: -3 }));
-    } else if (actionId === 'family') {
-      results.push(`家族と${G.pick(['公園', '遊園地', 'キャンプ', '実家'])}に出かけた。` + G.applyFx(s, { stamina: 25, cond: 1, money: -3 }));
+    }
+    if (privId) {
+      const pm = G.doPrivate(s, privId);
+      if (pm) results.push(pm);
     }
     for (const r of results) log(s, r);
     G.endWeek(s);
@@ -283,45 +276,35 @@
       }
     }
 
-    // 収入と生活費
-    const income = (p.salary * 0.65) / 52;
-    const living = 4 + (p.married ? 6 : 0) + p.children * 3;
-    p.money += income - living;
+    // 収入（生活費は私生活側で計算）
+    p.money += (p.salary * 0.65) / 52;
 
     // 自然回復と調子の波
     p.stamina = G.clamp(p.stamina + 6 + (p.skills.includes('recover') ? 4 : 0), 0, 100);
     const r = Math.random();
     if (r < 0.15) p.condition = Math.min(4, p.condition + 1);
-    else if (r < 0.3) p.condition = Math.max(0, p.condition - 1);
+    else if (r < 0.3 && !(p.hobby === 'fishing' && G.chance(0.5))) p.condition = Math.max(0, p.condition - 1);
     if (p.stamina < 20 && G.chance(0.5)) p.condition = Math.max(0, p.condition - 1);
     if (p.squad === 'second') p.popularity = Math.max(0, p.popularity - 0.05);
+
+    // 私生活
+    G.weeklyLife(s);
 
     // 年間スケジュール
     G.scheduled(s);
 
     // ランダムイベント
     const hasChoiceScene = s.queue.some((q) => q.kind !== 'info');
-    if (!hasChoiceScene && !s.ended) {
+    if (!hasChoiceScene && !s.ended && !s.retired) {
       let ev = null;
       if (s.tmp.forceEvent) {
         ev = G.EVENTS.find((e) => e.id === s.tmp.forceEvent);
         s.tmp.forceEvent = null;
-      } else if (G.chance(0.35)) ev = G.pickRandomEvent(s);
+      } else if (G.chance(0.3)) ev = G.pickRandomEvent(s);
       if (ev) G.queueEvent(s, ev);
     }
 
-    // 恋人との関係
-    if (p.girlfriend) {
-      p.girlfriend.love -= 1.5;
-      if (p.girlfriend.love <= 0) {
-        scene(s, '別れ', `${p.girlfriend.name}さんから「私たち、もう終わりにしましょう」と告げられた…。`);
-        s.history.push({ year: s.year, text: `${p.girlfriend.name}さんと破局` });
-        p.girlfriend = null;
-        p.condition = Math.max(0, p.condition - 2);
-      }
-    }
-
-    if (s.ended) return;
+    if (s.ended || s.retired) return;
     s.week++;
     if (s.week > 52) G.newYear(s);
   };
@@ -731,16 +714,22 @@
     if (q.kind === 'release') return ['トライアウトを受ける', '現役を引退する'];
     if (q.kind === 'fa') return ['残留する', ...q.offers.map((o) => `${G.teamById(o.teamId).short}へ移籍`)];
     if (q.kind === 'forced_retire') return ['引退を決意する'];
+    if (q.kind === 'life') return G.lifeChoices(s, q).map((c) => c.label);
     return ['OK'];
   };
 
   // 選択を処理し、結果シーン（info）に置き換える
-  G.resolveScene = (s, idx) => {
+  G.resolveScene = (s, idx, input) => {
     const q = s.queue.shift();
     const p = s.player;
     let title = q.title;
     let text = '';
-    if (q.kind === 'event') {
+    if (q.kind === 'life') {
+      const c = G.lifeChoices(s, q)[idx];
+      text = c.run(s, q, input);
+      if (text === null) return;
+      log(s, `【${q.title}】${text}`, 'event');
+    } else if (q.kind === 'event') {
       const ev = G.EVENTS.find((e) => e.id === q.id);
       const c = ev.choices[idx];
       text = c.run(s);
@@ -838,6 +827,7 @@
     s.totalEarnings += p.salary;
     scene(s, `${s.year}年 新年`, `新しい年が明けた。${p.age}歳、プロ${p.yearsPro + 1}年目のシーズンが始まる！${msgs.length ? '\n\n' + msgs.join('\n') : ''}`);
     log(s, `${s.year}年 プロ${p.yearsPro + 1}年目（${p.age}歳）`, 'year');
+    G.yearlyLife(s);
   };
 
   G.pushCareer = (s) => {
@@ -869,11 +859,26 @@
   };
 
   // ---------- 引退・エンディング ----------
+  // 引退を決めたら、第二の人生を選んでエンディングへ
   G.retire = (s, reason) => {
     const p = s.player;
     G.pushCareer(s);
-    s.ended = true;
+    s.retired = { reason, age: p.age, years: p.yearsPro + 1 };
     s.queue = [];
+    s.history.push({ year: s.year, text: `現役引退（${p.age}歳）` });
+    const tot = G.careerTotals(s);
+    s.queue.push({
+      kind: 'life',
+      id: 'second_career',
+      title: '引退会見',
+      text: `${reason}。\n\nプロ${p.yearsPro + 1}年、${p.age}歳。たくさんのフラッシュを浴びながら、深く頭を下げた。\n${G.isPitcher(p) ? `通算${tot.pit.w}勝${tot.pit.s}セーブ` : `通算${tot.bat.h}安打${tot.bat.hr}本塁打`}。\n\n明日からは、新しい人生が始まる。これから何をしよう？`,
+      data: {},
+    });
+    log(s, `${reason}（${p.age}歳）`, 'year');
+  };
+
+  G.finishLife = (s, careerId) => {
+    const p = s.player;
     const tot = G.careerTotals(s);
     const pitcher = G.isPitcher(p);
     const meikyu = pitcher ? tot.pit.w >= 200 || tot.pit.s >= 250 : tot.bat.h >= 2000;
@@ -885,24 +890,20 @@
     else if (war >= 8) title = '頼れる名脇役';
     else if (war >= 2) title = '一軍の戦力';
     else title = '夢を追い続けた男';
-
-    let after;
-    if (war >= 40 && p.popularity >= 60) after = '数年後、古巣の監督に就任。今度は指揮官として日本一を目指す。';
-    else if (p.popularity >= 50) after = '引退後は野球解説者として活躍。わかりやすい解説で人気者になった。';
-    else if (war >= 8) after = '引退後はコーチとして球団に残り、若手の育成に情熱を注いでいる。';
-    else if (war >= 2) after = '引退後は球団スカウトとして、未来のスター発掘に全国を飛び回っている。';
-    else after = G.pick(['引退後は地元で少年野球チームの監督に。子供たちに野球の楽しさを伝えている。', '引退後はラーメン屋を開業。店にはユニフォームが飾られている。', '引退後は一般企業に就職。草野球チームでは今でもエースで4番だ。']);
-
+    const career = G.SECOND_CAREERS.find((c) => c.id === careerId);
     s.ending = {
-      reason,
+      reason: s.retired.reason,
       title,
-      after,
+      after: career.text(s, war),
+      careerName: career.name,
+      life: G.lifeScore(s),
       meikyu,
       hall: war >= 50 || (meikyu && war >= 35),
-      age: p.age,
-      years: p.yearsPro + 1,
+      age: s.retired.age,
+      years: s.retired.years,
     };
-    log(s, `${reason}（${p.age}歳）`, 'year');
+    s.ended = true;
+    s.queue = [];
   };
 
   // ---------- セーブ／ロード ----------

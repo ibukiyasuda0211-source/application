@@ -154,7 +154,6 @@
     { id: 'yakiniku', name: '高級焼肉', price: 6, desc: '調子が1段階上がる', use: (p) => { p.condition = G.clamp(p.condition + 1, 0, 4); return 'おいしい焼肉で調子が上がった！'; } },
     { id: 'onsen', name: '温泉旅行', price: 20, desc: '体力全回復＆調子アップ', use: (p) => { p.stamina = 100; p.condition = G.clamp(p.condition + 1, 0, 4); return '温泉でリフレッシュ！体力全回復＆調子アップ！'; } },
     { id: 'trainer', name: '専属トレーナー契約(1年)', price: 800, desc: '1年間、練習の経験点が25%アップ', use: (p, s) => { s.flags.trainerUntil = s.year; return '専属トレーナーと契約した！今年の練習効率がアップ！'; } },
-    { id: 'house', name: '高級マンション', price: 8000, desc: '人気+10・休養の回復量アップ（一度きり）', once: true, use: (p) => { p.popularity = G.clamp(p.popularity + 10, 0, 100); p.house = true; return '高級マンションを購入した！生活が快適になった！'; } },
     { id: 'car', name: '高級スポーツカー', price: 3000, desc: '人気+5（一度きり）', once: true, use: (p) => { p.popularity = G.clamp(p.popularity + 5, 0, 100); p.car = true; return 'ピカピカのスポーツカーを手に入れた！'; } },
   ];
 
