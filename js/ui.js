@@ -34,6 +34,7 @@
     const team = G.teamById(p.teamId);
     if (s.ended) return `<b>${esc(p.name)}</b><div class="muted">引退済み（${s.ending.age}歳・${esc(s.ending.title)}）</div>`;
     const m = G.monthOf(s.week);
+    if (s.after) return `<b>${esc(p.name)}</b><div class="muted">引退後・${esc(G.afterRank(s))}・${p.age}歳／${s.year}年${m.month}月</div>`;
     return `<b>${esc(p.name)}</b><div class="muted">${team.short}・${G.positionName(p)}・${p.age}歳／${s.year}年${m.month}月・プロ${p.yearsPro + 1}年目</div>`;
   };
 
@@ -118,17 +119,38 @@
     if (G.isPitcher(p)) {
       const st = s.stats.pit;
       const f = s.farm.pit;
-      return `<div class="mini-stats"><div><b>1軍</b> ${st.g}登板 ${st.w}勝${st.l}敗 ${st.s}S ${st.hld}H 防御率 <b>${G.fmtERA(st.er, st.outs)}</b></div>
-        <div class="muted"><b>2軍</b> ${f.g}登板 ${f.w}勝${f.l}敗 防御率 ${G.fmtERA(f.er, f.outs)}</div></div>`;
+      return `<div class="mini-stats"><div><b>${G.squadName(p, 'first')}</b> ${st.g}登板 ${st.w}勝${st.l}敗 ${st.s}S ${st.hld}H 防御率 <b>${G.fmtERA(st.er, st.outs)}</b></div>
+        <div class="muted"><b>${G.squadName(p, 'second')}</b> ${f.g}登板 ${f.w}勝${f.l}敗 防御率 ${G.fmtERA(f.er, f.outs)}</div></div>`;
     }
     const st = s.stats.bat;
     const f = s.farm.bat;
-    return `<div class="mini-stats"><div><b>1軍</b> ${st.g}試合 打率 <b>${G.fmtRate(st.h, st.ab)}</b> ${st.hr}本 ${st.rbi}打点 ${st.sb}盗塁</div>
-      <div class="muted"><b>2軍</b> ${f.g}試合 打率 ${G.fmtRate(f.h, f.ab)} ${f.hr}本 ${f.rbi}打点</div></div>`;
+    return `<div class="mini-stats"><div><b>${G.squadName(p, 'first')}</b> ${st.g}試合 打率 <b>${G.fmtRate(st.h, st.ab)}</b> ${st.hr}本 ${st.rbi}打点 ${st.sb}盗塁</div>
+      <div class="muted"><b>${G.squadName(p, 'second')}</b> ${f.g}試合 打率 ${G.fmtRate(f.h, f.ab)} ${f.hr}本 ${f.rbi}打点</div></div>`;
+  };
+
+  const afterCard = (s) => {
+    const p = s.player;
+    const team = G.teamById(p.teamId);
+    const tot = G.careerTotals(s);
+    const career = G.isPitcher(p) ? `通算 ${tot.pit.w}勝 ${tot.pit.s}セーブ 防御率${G.fmtERA(tot.pit.er, tot.pit.outs)}` : `通算 ${tot.bat.h}安打 ${tot.bat.hr}本塁打 打率${G.fmtRate(tot.bat.h, tot.bat.ab)}`;
+    return `<aside class="panel pcard" style="--team:${team.color}">
+      <div class="head"><div class="num">OB</div><div><div class="pname">${esc(p.name)}</div>
+      <div class="sub">${p.age}歳・引退して${s.year - s.after.startYear + 1}年目</div></div></div>
+      <div class="tags"><span class="tag first">${esc(G.afterRank(s))}</span><span class="tag">元${esc(team.short)}</span></div>
+      <div class="bars">
+        ${bar('体力', p.stamina, staminaColor(p.stamina))}
+        ${bar('人気', p.popularity, '#ff8a1f')}
+        ${bar('充実度', p.happy, '#e0569b')}
+      </div>
+      <div class="money"><div><small>所持金</small><b>${G.fmtMoney(p.money)}</b></div><div><small>週の収入</small><b>${G.fmtMoney(G.afterIncome(s))}</b></div></div>
+      <div class="mini-stats"><div><b>現役時代</b> プロ${s.retired.years}年</div><div class="muted">${career}</div></div>
+      ${s.after.titles.length ? `<div class="skills">${s.after.titles.slice(-4).map((t) => `<span class="skill">${esc(t)}</span>`).join('')}</div>` : ''}
+    </aside>`;
   };
 
   const playerCard = (s) => {
     const p = s.player;
+    if (s.after) return afterCard(s);
     const team = G.teamById(p.teamId);
     const hand = G.HANDS.find((h) => h.id === p.hand);
     const cond = G.CONDITIONS[p.condition];
@@ -137,7 +159,7 @@
       <div class="head"><div class="num">${p.number}</div><div><div class="pname">${esc(p.name)}</div>
       <div class="sub">${G.positionName(p)}・${hand.name}・${p.age}歳・プロ${p.yearsPro + 1}年目</div></div></div>
       <div class="tags">
-        <span class="tag ${p.squad}">${p.squad === 'first' ? '1軍' : '2軍'}</span>
+        <span class="tag ${p.squad}">${G.squadName(p)}</span>
         ${p.squad === 'first' || G.isPitcher(p) ? `<span class="tag">${G.roleName(p)}</span>` : ''}
         <span class="tag">${growth.name}</span>
         ${p.injury ? `<span class="tag injury">故障中：${esc(p.injury.name)}（残り${p.injury.weeks}週）</span>` : ''}
@@ -167,13 +189,14 @@
     { id: 'upgrade', name: '能力アップ' },
     { id: 'stats', name: '成績' },
     { id: 'standings', name: '順位表' },
+    { id: 'draft', name: 'ドラフト同期' },
     { id: 'people', name: '人間関係' },
     { id: 'life', name: '人生' },
     { id: 'shop', name: 'ショップ' },
   ];
 
   const tabsView = (s) =>
-    `<div class="tabs">${TABS.map(
+    `<div class="tabs">${TABS.filter((t) => !(s.after && ['upgrade', 'shop'].includes(t.id))).map(
       (t) =>
         `<button class="tab ${ui.tab === t.id ? 'on' : ''}" data-act="tab" data-arg="${t.id}">${t.name}${
           t.id === 'upgrade' && canUpgradeSomething(s.player) ? '<span class="dot"></span>' : ''
@@ -211,20 +234,125 @@
     return { train, priv };
   };
 
+  // ---------- 試合画面（1試合ずつ作戦を選ぶ） ----------
+  const gameMeta = (s, own) => {
+    const opp = G.teamById(own.oppId);
+    const r = s.standings[s.player.teamId];
+    return `<div class="game-head"><span class="team-chip" style="background:${G.teamById(s.player.teamId).color}">${G.teamById(s.player.teamId).short}</span> vs <span class="team-chip" style="background:${opp.color}">${opp.short}</span>
+      <span class="muted">${opp.name}・今週 ${s.gw.d + 1}/${s.gw.n}試合目・チーム ${r.w}勝${r.l}敗${r.d}分</span></div>`;
+  };
+
+  const pregameView = (s) => {
+    const p = s.player;
+    const own = s.gw.cur.own;
+    let scout;
+    if (own.kind === 'bat') {
+      const o = G.OPP_PITCHERS.find((x) => x.id === own.oppP.type);
+      scout = `<div class="scout"><b>${own.starter ? `今日は「${own.order}」でスタメン出場` : 'ベンチスタート（代打で出番があるかも）'}</b>
+        <div>相手先発：${esc(own.oppP.name)}（<b>${o.name}</b>）</div><div class="muted">スコアラー「${o.hint}」</div></div>`;
+    } else {
+      const l = G.OPP_LINEUPS.find((x) => x.id === own.lineup);
+      scout = `<div class="scout"><b>${esc(own.situation)}</b><div>相手打線：<b>${l.name}</b></div><div class="muted">捕手「${l.hint}」</div></div>`;
+    }
+    const aps = G.approachList(p);
+    const def = G.defaultApproach(s);
+    return `<div class="panel game-panel">
+      ${gameMeta(s, own)}${scout}
+      <div class="section-title"><span class="step">⚾</span>この試合で意識すること</div>
+      <div class="act-grid">${aps
+        .map((a) => `<button class="act train ${a.id === def ? 'on' : ''}" data-act="approach" data-arg="${a.id}"><b>${a.name}</b><small>${a.desc}</small></button>`)
+        .join('')}</div>
+      <div class="act-foot"><span class="muted" style="font-size:13px">相手の特徴に合った作戦を選ぶと結果が出やすい。</span>
+      <button class="btn sub small" data-act="autoGames">今週の残りはおまかせ</button></div>
+    </div>`;
+  };
+
+  const resultView = (s) => {
+    const r = s.gw.last;
+    const mark = r.outcome === 'W' ? '勝利' : r.outcome === 'L' ? '敗戦' : '引き分け';
+    const ap = G.approachById(s.player, r.ap);
+    const read = r.match === 'good' ? '<div class="read good">読みが当たった！ 作戦がハマった。</div>' : r.match === 'bad' ? '<div class="read bad">相手の思うつぼだった…。作戦が裏目に出た。</div>' : '';
+    let detail;
+    if (r.kind === 'bat') {
+      detail = `<ol class="pa-list">${r.pas.map((pa, i) => `<li class="pa-${pa.code}"><span>第${i + 1}打席</span>${esc(G.paText(pa))}</li>`).join('')}</ol>
+        <div class="line">${G.batLineText(r.line)}</div>`;
+    } else {
+      detail = `<ol class="pa-list">${G.inningText(r.innings, r.startInning)
+        .map((t) => `<li class="${/\d+失点/.test(t) ? 'pa-bad' : 'pa-OUT'}">${esc(t)}</li>`)
+        .join('')}</ol><div class="line">${G.pitLineText(r.line)}</div>`;
+    }
+    const acc = s.gw.acc;
+    const week = r.kind === 'bat' ? `今週の成績：${G.batLineText(acc.weekBat)}` : `今週の成績：${G.pitLineText(acc.weekPit)}`;
+    return `<div class="panel game-panel">
+      <div class="game-head"><b class="res-${r.outcome}">${mark}</b> ${r.score[0]} - ${r.score[1]} <span class="muted">vs ${G.teamById(r.oppId).name}・作戦「${ap.name}」</span></div>
+      ${read}${detail}
+      <div class="muted" style="font-size:13px">${week}</div>
+      <div class="act-foot mt"><span></span><span class="btns-row"><button class="btn sub small" data-act="autoGames">残りはおまかせ</button>
+      <button class="btn" data-act="nextGame">${s.gw.d >= s.gw.n ? '今週を終える ▶' : '次の試合へ ▶'}</button></span></div>
+    </div>`;
+  };
+
+  const gameSettings = (s) => {
+    const p = s.player;
+    const mode = s.flags.gameMode === 'auto' ? 'auto' : 'each';
+    const def = G.defaultApproach(s);
+    return `<details class="settings"><summary>試合の設定</summary>
+      <div class="choices mt"><button class="choice ${mode === 'each' ? 'on' : ''}" data-act="gameMode" data-arg="each">1試合ずつ作戦を選ぶ<small>出場する試合の前に毎回選ぶ</small></button>
+      <button class="choice ${mode === 'auto' ? 'on' : ''}" data-act="gameMode" data-arg="auto">まとめて自動で進める<small>いつもの作戦で1週間分を一気に</small></button></div>
+      <div class="mt" style="font-size:14px;font-weight:700">いつもの作戦（自動のときと2軍戦で使う）</div>
+      <div class="choices">${G.approachList(p).map((a) => `<button class="choice ${def === a.id ? 'on' : ''}" data-act="defaultAp" data-arg="${a.id}">${a.name}</button>`).join('')}</div>
+    </details>`;
+  };
+
+  const afterActionTab = (s) => {
+    const p = s.player;
+    const works = G.afterWorks(s);
+    if (!works.some((w) => w.id === ui.sel.work && w.ok)) ui.sel.work = works.find((w) => w.ok).id;
+    const priv = G.privateActions(s);
+    if (!priv.some((a) => a.id === ui.sel.priv && a.ok)) ui.sel.priv = 'relax';
+    const places = G.PLACES.map((pl) => ({ ...pl, items: priv.filter((a) => a.place === pl.id) })).filter((pl) => pl.items.length);
+    if (!places.some((pl) => pl.id === ui.place)) ui.place = 'home';
+    const cur = places.find((pl) => pl.id === ui.place);
+    const special = (a) => a.ok && /^(confess|propose)/.test(a.id);
+    const chips = places.map((pl) => `<button class="place ${ui.place === pl.id ? 'on' : ''}" data-act="place" data-arg="${pl.id}">${pl.name}${pl.items.some(special) ? '<span class="dot"></span>' : ''}</button>`).join('');
+    const workBtn = (w) => `<button class="act train ${ui.sel.work === w.id ? 'on' : ''}" data-act="selWork" data-arg="${w.id}" ${w.ok ? '' : 'disabled'}><b>${esc(w.name)}</b><small>${esc(w.desc)}</small>${w.ok ? '' : `<small class="why">${esc(w.reason)}</small>`}</button>`;
+    const privBtn = (a) =>
+      `<button class="act rest ${special(a) ? 'special' : ''} ${ui.sel.priv === a.id ? 'on' : ''}" data-act="selPriv" data-arg="${esc(a.id)}" ${a.ok ? '' : 'disabled'}><b>${esc(a.name)}</b><small>${esc(a.desc)}</small>${a.cost ? `<small class="cost-tag">${G.fmtMoney(a.cost)}</small>` : ''}${a.ok ? '' : `<small class="why">${esc(a.reason)}</small>`}</button>`;
+    const selW = works.find((w) => w.id === ui.sel.work);
+    const selP = priv.find((a) => a.id === ui.sel.priv);
+    const def = G.afterDef(s);
+    const a = s.after;
+    const next = a.career !== 'business' && a.level + 1 < def.need.length ? `（次の昇進まで経験${Math.max(0, def.need[a.level + 1] - a.xp)}）` : '';
+    return `<div class="panel">
+      <div class="section-title"><span class="step">1</span>今週の仕事 <span class="muted">${esc(G.afterRank(s))}${next}</span></div>
+      <div class="act-grid">${works.map(workBtn).join('')}</div>
+      <div class="section-title"><span class="step">2</span>オフの過ごし方</div>
+      <div class="places">${chips}</div>
+      <div class="act-grid">${cur.items.map(privBtn).join('')}</div>
+      <div class="week-bar"><div class="week-sum"><span>仕事：<b>${esc(selW.name)}</b></span><span>オフ：<b>${esc(selP.name)}</b>${selP.cost ? `（${G.fmtMoney(selP.cost)}）` : ''}</span></div>
+        <button class="btn" data-act="week">この1週間を過ごす ▶</button></div>
+      <div class="act-foot"><span class="muted" style="font-size:13px">${p.age}歳。人生はまだまだ続く。</span><button class="btn sub small" data-act="auto">おまかせで4週進める</button></div>
+      ${logView(s)}
+    </div>`;
+  };
+
   const actionTab = (s) => {
+    if (s.after) return afterActionTab(s);
+    if (s.gw && s.gw.last) return resultView(s);
+    if (s.gw && s.gw.await) return pregameView(s);
     const { train, priv } = syncSelection(s);
     const mul = G.trainingMultiplier(s);
     const phase = G.phaseOf(s.week);
     const p = s.player;
     const games = G.gamesInWeek(s.week);
     let note = '';
-    if (games) note = `今週は${games}試合（${p.squad === 'first' ? '1軍' : '2軍'}）`;
+    if (games) note = `今週は${games}試合（${G.squadName(p)}）`;
     else if (phase.id === 'open') note = '今週はオープン戦';
     const cond = G.CONDITIONS[p.condition];
     const quick = `<div class="quick"><span class="cond ${cond.cls}"><span class="arrow">${cond.icon}</span>${cond.name}</span>
       <span>体力 <b style="color:${staminaColor(p.stamina)}">${Math.round(p.stamina)}</b></span>
       <span>充実度 <b>${Math.round(p.happy)}</b></span>
-      <span>所持金 <b>${G.fmtMoney(p.money)}</b></span><span class="tag ${p.squad}">${p.squad === 'first' ? '1軍' : '2軍'}</span>
+      <span>所持金 <b>${G.fmtMoney(p.money)}</b></span><span class="tag ${p.squad}">${G.squadName(p)}</span>
       ${p.injury ? `<span class="tag injury">故障 残り${p.injury.weeks}週</span>` : ''}</div>`;
 
     const trainBtn = (a) =>
@@ -259,6 +387,7 @@
       </div>
       <div class="act-foot"><span class="muted" style="font-size:13px">${note}</span>
         <button class="btn sub small" data-act="auto">おまかせで4週進める</button></div>
+      ${gameSettings(s)}
       ${logView(s)}
     </div>`;
   };
@@ -390,7 +519,7 @@
     const pitcher = G.isPitcher(p);
     const head = pitcher ? pitHead : batHead;
     const row = pitcher ? (l, c, cls) => pitRow(l, c.pit, cls) : (l, c, cls) => batRow(l, c.bat, cls);
-    const cur = `<div class="tbl-wrap"><table class="stats">${head('')}${row('1軍', s.stats, 'me')}${row('2軍', s.farm)}</table></div>`;
+    const cur = `<div class="tbl-wrap"><table class="stats">${head('')}${row(G.squadName(p, 'first'), s.stats, 'me')}${row(G.squadName(p, 'second'), s.farm)}</table></div>`;
 
     const tot = G.careerTotals(s);
     const careerRows = s.career
@@ -414,7 +543,8 @@
 
   const standingsTab = (s) => {
     const p = s.player;
-    return `<div class="panel">${G.LEAGUES.map((lg) => {
+    const showMlb = p.league === 'mlb' || s.flags.mlbStart;
+    return `<div class="panel">${G.LEAGUES.filter((lg) => !lg.mlb || showMlb).map((lg) => {
       const rows = G.leagueRanking(s, lg.id);
       return `<h3>${lg.name}</h3><div class="tbl-wrap"><table class="stats"><tr><th>順位</th><th>球団</th><th>試合</th><th>勝</th><th>敗</th><th>分</th><th>勝率</th><th>差</th></tr>${rows
         .map((r, i) => {
@@ -423,6 +553,42 @@
         })
         .join('')}</table></div>`;
     }).join('')}</div>`;
+  };
+
+  const draftTab = (s) => {
+    const p = s.player;
+    if (!s.draft) return '<div class="panel"><p class="muted">ドラフトの記録がありません。</p></div>';
+    const f = ui.draftFilter || 'all';
+    const tot = G.careerTotals(s);
+    const meStatus = s.ended || s.retired ? '引退' : p.league === 'mlb' ? (p.squad === 'first' ? 'MLB' : 'マイナー') : p.squad === 'first' ? '1軍' : '2軍';
+    const rows = s.draft.picks
+      .filter((d) => f === 'all' || (f === 'r1' && d.round === 1) || (f === 'team' && d.teamId === G.draftTeamOf(s)) || (f === 'active' && (d.me ? !s.retired : !d.retired)))
+      .map((d) => {
+        const team = G.teamById(d.teamId);
+        if (d.me) {
+          const line = G.isPitcher(p) ? `${tot.pit.g}登板 ${tot.pit.w}勝${tot.pit.s}S 防${G.fmtERA(tot.pit.er, tot.pit.outs)}` : `${tot.bat.g}試合 ${tot.bat.h}安打 ${tot.bat.hr}本 率${G.fmtRate(tot.bat.h, tot.bat.ab)}`;
+          return `<tr class="me"><td>${d.round}位</td><td style="text-align:left"><span class="team-chip" style="background:${team.color}">${team.short}</span></td><td style="text-align:left">${esc(p.name)}（あなた）</td><td>${G.posById(p.position).name}</td><td>${p.age}</td><td><span class="st ${G.draftStatusClass(meStatus)}">${meStatus}</span></td><td style="text-align:left">${line}</td><td>${tot.war.toFixed(1)}</td><td style="text-align:left">-</td></tr>`;
+        }
+        const t = d.tot;
+        const line = d.pos === 'P' ? (t.pit.g ? `${t.pit.g}登板 ${t.pit.w}勝${t.pit.s}S 防${G.fmtERA(t.pit.er, t.pit.outs)}` : '1軍登板なし') : t.bat.g ? `${t.bat.g}試合 ${t.bat.h}安打 ${t.bat.hr}本 率${G.fmtRate(t.bat.h, t.bat.ab)}` : '1軍出場なし';
+        let last = '-';
+        if (d.last) {
+          const l = d.last;
+          last = d.pos === 'P' ? (l.pit.g ? `${l.pit.w}勝${l.pit.s}S 防${G.fmtERA(l.pit.er, l.pit.outs)}` : '出場なし') : l.bat.g ? `率${G.fmtRate(l.bat.h, l.bat.ab)} ${l.bat.hr}本` : '出場なし';
+        }
+        const rival = d.id === s.draft.rivalId ? ' <span class="tag friend">ライバル</span>' : '';
+        return `<tr><td>${d.round}位</td><td style="text-align:left"><span class="team-chip" style="background:${team.color}">${team.short}</span></td><td style="text-align:left">${esc(d.name)}${rival}</td><td>${G.posById(d.pos).name}</td><td>${d.age}</td><td><span class="st ${G.draftStatusClass(d.status)}">${esc(d.status)}</span></td><td style="text-align:left">${line}</td><td>${d.war.toFixed(1)}</td><td style="text-align:left">${last}${d.note ? `<br><small class="muted">${esc(d.note)}</small>` : ''}</td></tr>`;
+      })
+      .join('');
+    const filters = [['all', '全員'], ['r1', '1位指名'], ['team', '同じ球団'], ['active', '現役のみ']]
+      .map(([id, name]) => `<button class="place ${f === id ? 'on' : ''}" data-act="draftFilter" data-arg="${id}">${name}</button>`)
+      .join('');
+    const active = s.draft.picks.filter((d) => (d.me ? !s.retired : !d.retired)).length;
+    return `<div class="panel"><h3>${s.draft.year}年 ドラフト会議 <span class="muted" style="font-size:13px">指名${s.draft.picks.length}人・現役${active}人</span></h3>
+      <p class="muted" style="font-size:13px;margin-top:0">同じ年にプロ入りした同期たちの現在。成績は毎年のシーズン終了後に更新されます。</p>
+      <div class="places">${filters}</div>
+      <div class="tbl-wrap"><table class="stats draft-table"><tr><th>順位</th><th>球団</th><th>選手</th><th>守備</th><th>年齢</th><th>状態</th><th>通算成績（1軍）</th><th>WAR</th><th>昨季</th></tr>${rows}</table></div>
+    </div>`;
   };
 
   const shopTab = (s) => {
@@ -534,7 +700,7 @@
           : '<p class="muted">これから刻まれていく。</p>'
       }
       <div class="act-foot mt"><span class="muted" style="font-size:13px">データは毎週自動でセーブされます。</span>
-      ${p.age >= 30 ? '<button class="btn danger small" data-act="retire">現役引退を表明する</button>' : ''}</div>
+      ${s.after ? '<button class="btn danger small" data-act="finishStory">物語を締めくくる</button>' : p.age >= 30 ? '<button class="btn danger small" data-act="retire">現役引退を表明する</button>' : ''}</div>
     </div>`;
   };
 
@@ -566,9 +732,10 @@
     else if (ui.tab === 'shop') body = shopTab(s);
     else if (ui.tab === 'life') body = lifeTab(s);
     else if (ui.tab === 'people') body = peopleTab(s);
+    else if (ui.tab === 'draft') body = draftTab(s);
     else body = actionTab(s);
     return `<header class="topbar">
-        <div class="date">${s.year}年 ${m.month}月 第${m.weekInMonth}週<span class="phase">${phase.name}</span></div>
+        <div class="date">${s.year}年 ${m.month}月 第${m.weekInMonth}週${s.after ? '' : `<span class="phase">${phase.name}</span>`}</div>
         <div class="team"><span class="team-chip" style="background:${team.color}">${team.short}</span>${team.name}</div>
         <div class="spacer"></div>
         <button class="btn sub" data-act="quit">タイトルへ</button>
@@ -625,7 +792,7 @@
       <div class="hero">
         <div>⚾ ${esc(e.reason)} ⚾</div>
         <h1>${esc(p.name)}</h1>
-        <div>${e.age}歳・プロ${e.years}年</div>
+        <div>${e.age}歳で引退・プロ${e.years}年${s.after ? `／${p.age}歳まで生きた人生の物語` : ''}</div>
         <div class="legend">${esc(e.title)}</div>
         <div class="badges">${e.meikyu ? '<span>🏅 名球会入り</span>' : ''}${e.hall ? '<span>🏛 野球殿堂入り</span>' : ''}</div>
       </div>
@@ -635,6 +802,8 @@
         <div class="panel"><h3>通算成績</h3><dl class="kv">${main}<dt>通算WAR</dt><dd>${tot.war.toFixed(1)}</dd><dt>生涯年収</dt><dd>${G.fmtMoney(s.totalEarnings)}</dd></dl></div>
         <div class="panel"><h3>第二の人生：${esc(e.careerName || '')}</h3><p>${esc(e.after)}</p>
           <p>${esc(familyEpilogue(s))}</p>
+          ${s.after && s.after.titles.length ? `<h3>引退後の歩み</h3><ul class="timeline">${s.after.titles.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
+          ${p.kids.filter((k) => k.pro).map((k) => `<p>🎉 ${esc(k.name)}は${G.teamById(k.pro.team).name}にドラフト${k.pro.round}位で入団し、親子二代のプロ野球選手になった。</p>`).join('')}
           <h3>タイトル・表彰</h3>${tc.length ? `<div class="titles">${tc.map(([n, c]) => `<span class="trophy">🏆 ${n}${c > 1 ? ` ×${c}` : ''}</span>`).join('')}</div>` : '<p class="muted">なし</p>'}
         </div>
       </div>
@@ -743,14 +912,29 @@
     },
     week: () => {
       if (ui.s.queue.length) return;
+      if (ui.s.after) {
+        G.doAfterWeek(ui.s, ui.sel.work, ui.sel.priv);
+        afterTurn();
+        return;
+      }
       syncSelection(ui.s);
       G.doAction(ui.s, ui.sel.train, ui.sel.priv);
       afterTurn();
     },
     auto: () => {
       const s = ui.s;
+      if (s.after) {
+        for (let i = 0; i < 4 && !s.queue.length && !s.ended; i++) {
+          const w = G.afterWorks(s).filter((x) => x.ok);
+          G.doAfterWeek(s, G.pick(w).id, 'relax');
+        }
+        afterTurn();
+        return;
+      }
+      const prevMode = s.flags.gameMode;
+      s.flags.gameMode = 'auto';
       for (let i = 0; i < 4; i++) {
-        if (s.queue.length || s.ended || s.retired) break;
+        if (s.queue.length || s.ended || s.retired || s.gw) break;
         const p = s.player;
         const train = G.trainingOptions(s);
         let id;
@@ -761,7 +945,53 @@
         }
         G.doAction(s, id, 'relax');
       }
+      s.flags.gameMode = prevMode;
       afterTurn();
+    },
+    approach: (arg) => {
+      if (!ui.s.gw || ui.s.queue.length) return;
+      G.stepGames(ui.s, arg);
+      afterTurn();
+    },
+    nextGame: () => {
+      if (!ui.s.gw || ui.s.queue.length) return;
+      G.stepGames(ui.s, null);
+      afterTurn();
+    },
+    autoGames: () => {
+      if (!ui.s.gw || ui.s.queue.length) return;
+      G.autoRestGames(ui.s);
+      afterTurn();
+    },
+    gameMode: (arg) => {
+      ui.s.flags.gameMode = arg;
+      save();
+      render();
+    },
+    defaultAp: (arg) => {
+      ui.s.flags[G.isPitcher(ui.s.player) ? 'pitApproach' : 'batApproach'] = arg;
+      save();
+      render();
+    },
+    selWork: (arg) => {
+      ui.sel.work = arg;
+      render();
+    },
+    draftFilter: (arg) => {
+      ui.draftFilter = arg;
+      render();
+    },
+    finishStory: () => {
+      ui.confirm = {
+        text: 'ここで物語を締めくくり、エンディングを見ますか？',
+        yes: 'エンディングへ',
+        run: () => {
+          G.finishLife(ui.s, ui.s.after.career);
+          ui.screen = 'ending';
+          save();
+        },
+      };
+      render();
     },
     move: (arg) => {
       if (G.moveHome(ui.s, arg)) toast(`${G.homeById(arg).name}に引っ越した！`);

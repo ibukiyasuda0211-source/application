@@ -20,7 +20,9 @@
   };
 
   // ---------- 打者 ----------
-  G.simPlateAppearances = (p, nPA, levelOffset) => {
+  // mods: 作戦による補正（hr/bb/k/babip/xbh/sb の倍率）、out: 打席ごとの結果を入れる配列
+  G.simPlateAppearances = (p, nPA, levelOffset, mods = {}, out = null) => {
+    const m = (k) => (mods[k] === undefined ? 1 : mods[k]);
     const b = p.batter;
     const off = G.COND_OFFSET[p.condition] + levelOffset + G.gauss(0, 4);
     const sk = (id) => p.skills.includes(id);
@@ -28,10 +30,10 @@
     const pw = b.power + off * 0.7;
     const sp = b.speed;
 
-    const pHR = Math.max(0.002, 0.004 + (pw - 40) * 0.001 + Math.max(0, pw - 75) * 0.0006) * (sk('powerhit') ? 1.15 : 1);
-    const pBB = 0.05 + c * 0.0003 + pw * 0.0002 + (sk('eye') ? 0.025 : 0);
-    const pK = Math.max(0.06, 0.28 - c * 0.0014) * (sk('tough') ? 0.85 : 1);
-    const babip = 0.25 + c * 0.0008 + sp * 0.0003 + (sk('avg') ? 0.012 : 0);
+    const pHR = Math.max(0.002, 0.004 + (pw - 40) * 0.001 + Math.max(0, pw - 75) * 0.0006) * (sk('powerhit') ? 1.15 : 1) * m('hr');
+    const pBB = (0.05 + c * 0.0003 + pw * 0.0002 + (sk('eye') ? 0.025 : 0)) * m('bb');
+    const pK = Math.max(0.04, 0.28 - c * 0.0014) * (sk('tough') ? 0.85 : 1) * m('k');
+    const babip = (0.25 + c * 0.0008 + sp * 0.0003 + (sk('avg') ? 0.012 : 0)) * m('babip');
     const chanceMul = sk('chance') ? 1.3 : 1;
 
     const st = G.emptyBat();
@@ -39,6 +41,8 @@
     for (let i = 0; i < nPA; i++) {
       st.pa++;
       const r = Math.random();
+      const rbi0 = st.rbi;
+      let code = 'OUT';
       let onBase = 0; // 0:なし 1:単打/四球 2:二塁打 3:三塁打
       if (r < pHR) {
         st.ab++;
@@ -46,30 +50,36 @@
         st.hr++;
         st.r++;
         st.rbi += 1 + Math.min(3, G.poisson(0.65 * chanceMul));
+        code = 'HR';
       } else if (r < pHR + pBB) {
         st.bb++;
         onBase = 1;
+        code = 'BB';
         if (G.chance(0.01)) st.rbi++;
       } else if (r < pHR + pBB + pK) {
         st.ab++;
         st.k++;
+        code = 'K';
       } else {
         st.ab++;
         if (G.chance(babip)) {
           st.h++;
           const x = Math.random();
-          const pD = 0.17 + pw * 0.0012;
+          const pD = (0.17 + pw * 0.0012) * m('xbh');
           const pT = 0.012 + sp * 0.0004;
           if (x < pT) {
             st.t++;
             onBase = 3;
+            code = '3B';
             st.rbi += Math.min(3, G.poisson(0.7 * chanceMul));
           } else if (x < pT + pD) {
             st.d++;
             onBase = 2;
+            code = '2B';
             st.rbi += Math.min(3, G.poisson(0.5 * chanceMul));
           } else {
             onBase = 1;
+            code = '1B';
             st.rbi += Math.min(2, G.poisson(0.28 * chanceMul));
           }
         } else if (G.chance(0.035)) {
@@ -79,7 +89,7 @@
       if (onBase) {
         let scoreP = onBase === 1 ? 0.3 + sp * 0.002 : onBase === 2 ? 0.5 + sp * 0.002 : 0.78;
         if (onBase === 1) {
-          const attempt = sp >= 55 ? (sp - 50) * 0.006 * (sk('steal') ? 1.5 : 1) : 0.01;
+          const attempt = Math.min(0.6, (sp >= 55 ? (sp - 50) * 0.006 * (sk('steal') ? 1.5 : 1) : 0.01) * m('sb'));
           if (G.chance(attempt)) {
             const succ = G.clamp(0.55 + sp * 0.0035 + (sk('steal') ? 0.08 : 0), 0, 0.95);
             if (G.chance(succ)) {
@@ -93,6 +103,7 @@
         }
         if (G.chance(scoreP)) st.r++;
       }
+      if (out) out.push({ code, rbi: st.rbi - rbi0 });
     }
     return st;
   };
@@ -132,8 +143,11 @@
   };
 
   // innings: 予定イニング数（小数可）。戻り値は投手成績
+  // opts.mods: 作戦による補正（run/hit/k/bb/hr の倍率）、opts.out: イニングごとの失点を入れる配列
   G.simPitching = (p, innings, levelOffset, opts = {}) => {
     const pr = G.pitchParams(p, levelOffset);
+    const md = opts.mods || {};
+    for (const [k, key] of [['run', 'runL'], ['hit', 'hitL'], ['k', 'kL'], ['bb', 'bbL'], ['hr', 'hrL']]) if (md[k] !== undefined) pr[key] *= md[k];
     const st = G.emptyPit();
     st.g = 1;
     const full = Math.floor(innings);
@@ -147,6 +161,7 @@
       st.bb += G.poisson(pr.bbL);
       if (r > 0 && G.chance(Math.min(0.9, pr.hrL * 4))) st.hr++;
       outs += 3;
+      if (opts.out) opts.out.push(r);
       if (opts.starter && st.r >= 5 && i >= 2) {
         break;
       }
@@ -201,111 +216,6 @@
     return [ours, theirs];
   };
 
-  // 自チームの1試合を処理し、選手の出場結果を返す
-  G.playOwnGame = (s, oppId, gameNo) => {
-    const p = s.player;
-    const myStr = G.teamStrength(s, p.teamId) + G.playerTeamBonus(s);
-    const oppStr = G.teamStrength(s, oppId);
-    let pWin = G.clamp(0.5 + (myStr - oppStr) * 0.012, 0.25, 0.75);
-    const res = { oppId, line: null, kind: null };
-    const active = p.squad === 'first' && !p.injury;
-
-    let outcome = null; // 'W' | 'L' | 'D'
-    let score = null;
-
-    if (active && !G.isPitcher(p)) {
-      let nPA = 0;
-      const starter = p.trust >= 55 || G.chance(0.2);
-      if (starter) nPA = G.chance(0.45) ? 5 : 4;
-      else if (G.chance(0.35)) nPA = 1;
-      if (nPA) {
-        const st = G.simPlateAppearances(p, nPA, 0);
-        res.line = st;
-        res.kind = 'bat';
-        pWin = G.clamp(pWin + G.batGameValue(st) * 0.035, 0.1, 0.9);
-        const d = G.chance(0.03);
-        outcome = d ? 'D' : G.chance(pWin) ? 'W' : 'L';
-        score = G.scoreline(outcome === 'W', d, Math.max(st.rbi, st.r));
-      }
-    } else if (active && G.isPitcher(p)) {
-      if (p.role === 'SP') {
-        s.rotation = (s.rotation || 0) + 1;
-        if (s.rotation % 6 === 0) {
-          const inn = G.clamp(4 + p.pitcher.stamina * 0.045 + G.gauss(0, 0.8) + (p.skills.includes('quick') ? 0.5 : 0), 3, 9);
-          const st = G.simPitching(p, inn, 0, { starter: true });
-          st.gs = 1;
-          const pen = 27 - st.outs;
-          const penRuns = G.poisson((pen / 3) * (3.7 / 9));
-          const offL = 3.9 + (myStr - 50) * 0.06 - (oppStr - 50) * 0.03;
-          let ours = G.poisson(offL);
-          let theirs = st.r + penRuns;
-          if (ours === theirs) {
-            if (G.chance(0.15)) outcome = 'D';
-            else if (G.chance(0.5)) {
-              ours++;
-              outcome = 'W';
-            } else {
-              theirs++;
-              outcome = 'L';
-            }
-          } else outcome = ours > theirs ? 'W' : 'L';
-          if (outcome === 'W' && st.outs >= 15 && st.r < ours && G.chance(0.82)) st.w = 1;
-          if (outcome === 'L' && st.r > ours) st.l = 1;
-          score = [ours, theirs];
-          res.line = st;
-          res.kind = 'pit';
-        }
-      } else {
-        // 救援
-        const d = G.chance(0.03);
-        outcome = d ? 'D' : G.chance(pWin) ? 'W' : 'L';
-        const lead = G.ri(1, 4);
-        let appear = false;
-        let st = null;
-        if (p.role === 'CL') {
-          if (outcome === 'W' && lead <= 3 && G.chance(0.85)) {
-            appear = true;
-            st = G.simPitching(p, 1, 0);
-            if (st.r >= lead) {
-              if (G.chance(0.6)) {
-                st.l = 1;
-                outcome = 'L';
-              } else outcome = 'D';
-            } else st.s = 1;
-          } else if (outcome !== 'W' && G.chance(0.12)) {
-            appear = true;
-            st = G.simPitching(p, 1, 0);
-          }
-        } else if (G.chance(0.42)) {
-          appear = true;
-          st = G.simPitching(p, 1, 0);
-          if (outcome === 'W' && lead <= 3) {
-            if (st.r >= lead) {
-              if (G.chance(0.5)) {
-                st.l = 1;
-                outcome = 'L';
-              }
-            } else st.hld = 1;
-          }
-        }
-        if (appear) {
-          res.line = st;
-          res.kind = 'pit';
-        }
-        score = G.scoreline(outcome === 'W', outcome === 'D');
-      }
-    }
-
-    if (!outcome) {
-      const d = G.chance(0.03);
-      outcome = d ? 'D' : G.chance(pWin) ? 'W' : 'L';
-      score = G.scoreline(outcome === 'W', d);
-    }
-    res.outcome = outcome;
-    res.score = score;
-    return res;
-  };
-
   // 2軍戦（成績のみ）
   G.playFarmGame = (s) => {
     const p = s.player;
@@ -346,45 +256,6 @@
   };
 
   G.flip = (o) => (o === 'W' ? 'L' : o === 'L' ? 'W' : 'D');
-
-  // 週の試合をまとめて行う
-  G.simWeekGames = (s, nGames) => {
-    const p = s.player;
-    const myLeague = G.teamById(p.teamId).league;
-    const weekBat = G.emptyBat();
-    const weekPit = G.emptyPit();
-    const farmBat = G.emptyBat();
-    const farmPit = G.emptyPit();
-    const games = [];
-    for (let d = 0; d < nGames; d++) {
-      for (const lg of G.LEAGUES) {
-        const ids = G.shuffle(G.TEAMS.filter((t) => t.league === lg.id).map((t) => t.id));
-        for (let i = 0; i < ids.length; i += 2) {
-          const a = ids[i];
-          const b = ids[i + 1];
-          if (lg.id === myLeague && (a === p.teamId || b === p.teamId)) {
-            const opp = a === p.teamId ? b : a;
-            const res = G.playOwnGame(s, opp, d);
-            G.recordResult(s, p.teamId, res.outcome);
-            G.recordResult(s, opp, G.flip(res.outcome));
-            games.push(res);
-            if (res.kind === 'bat') G.addStats(weekBat, res.line);
-            if (res.kind === 'pit') G.addStats(weekPit, res.line);
-          } else {
-            const o = G.playNpcGame(s, a, b);
-            G.recordResult(s, a, o);
-            G.recordResult(s, b, G.flip(o));
-          }
-        }
-      }
-      if (p.squad === 'second' && !p.injury) {
-        const fr = G.playFarmGame(s);
-        if (fr && fr.kind === 'bat') G.addStats(farmBat, fr.line);
-        if (fr && fr.kind === 'pit') G.addStats(farmPit, fr.line);
-      }
-    }
-    return { games, weekBat, weekPit, farmBat, farmPit };
-  };
 
   // オープン戦（成績は評価のみに使う）
   G.simOpenGames = (s, n) => {

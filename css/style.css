@@ -1215,3 +1215,145 @@ h3 {
     white-space: normal;
   }
 }
+
+/* ---------- 試合画面 ---------- */
+.game-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.game-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-weight: 800;
+  font-size: 18px;
+}
+.game-head .muted {
+  font-size: 13px;
+  font-weight: 700;
+}
+.scout {
+  background: #f1f7ee;
+  border: 1.5px solid #cfe3c6;
+  border-radius: 12px;
+  padding: 10px 14px;
+  display: grid;
+  gap: 2px;
+  font-size: 14px;
+}
+.read {
+  border-radius: 10px;
+  padding: 6px 12px;
+  font-weight: 800;
+  font-size: 14px;
+}
+.read.good {
+  background: #e6f6ec;
+  color: var(--good);
+}
+.read.bad {
+  background: #fdeaea;
+  color: var(--bad);
+}
+.pa-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.pa-list li {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #f6f8f5;
+  font-size: 14px;
+}
+.pa-list li span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  flex: none;
+}
+.pa-list .pa-HR {
+  background: #fff1d6;
+  color: #a55b00;
+  font-weight: 800;
+}
+.pa-list .pa-1B,
+.pa-list .pa-2B,
+.pa-list .pa-3B {
+  background: #fff7ec;
+  color: #c25500;
+  font-weight: 700;
+}
+.pa-list .pa-BB {
+  background: #eef4ff;
+  color: #2c56b5;
+}
+.pa-list .pa-bad {
+  background: #fdeaea;
+  color: var(--bad);
+  font-weight: 700;
+}
+.line {
+  font-weight: 800;
+}
+.res-W {
+  color: var(--bad);
+}
+.res-L {
+  color: var(--blue);
+}
+.res-D {
+  color: var(--muted);
+}
+.btns-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.settings {
+  margin-top: 12px;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 12px;
+}
+.settings summary {
+  cursor: pointer;
+  font-weight: 800;
+  font-size: 14px;
+}
+
+/* ---------- ドラフト同期 ---------- */
+.st {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 800;
+}
+.st-star {
+  background: #ffe3c2;
+  color: #a55b00;
+}
+.st-first {
+  background: #ffe5e5;
+  color: #c62828;
+}
+.st-farm {
+  background: #e3ecff;
+  color: #2c56b5;
+}
+.st-out {
+  background: #eee;
+  color: var(--muted);
+}
+.draft-table td {
+  vertical-align: top;
+}

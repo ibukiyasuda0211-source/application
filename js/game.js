@@ -32,7 +32,7 @@
   // ---------- ニューゲーム ----------
   G.newGame = (opt, slot) => {
     const p = G.createPlayer(opt);
-    const team = G.pick(G.TEAMS);
+    const team = G.pick(G.NPB_TEAMS());
     p.teamId = team.id;
     const rank = G.draftRank(p);
     const terms = G.DRAFT_TERMS[rank];
@@ -70,6 +70,8 @@
     };
     s.startYear = s.year;
     G.initLife(s);
+    p.league = 'npb';
+    G.genDraftClass(s);
     for (const t of G.TEAMS) s.teamStr[t.id] = Math.round(G.rf(42, 58));
     G.resetStandings(s);
     G.genLeaders(s);
@@ -90,7 +92,7 @@
     scene(
       s,
       '遊び方',
-      '毎週「練習」と「オフの過ごし方」をひとつずつ選んで、プロ野球選手としての人生を歩もう。\n\n・練習で「経験点」をためて「能力アップ」で能力を上げる\n・オフは自由。先輩と食事、デート、趣味、帰省、取材…出会いや人間関係が人生を変える\n・体力が減るとケガをしやすく、充実度が下がると調子を崩しやすい\n・2軍で結果を出して首脳陣の評価を上げると1軍昇格\n・シーズン中は試合が自動で行われ、成績が記録される\n・オフには契約更改。活躍すれば年俸アップ！\n・恋愛、結婚、子育て、引っ越し…引退後の人生まで、すべてはあなた次第\n\nめざせ、名球会。そして最高の人生！',
+      '毎週「練習」と「オフの過ごし方」をひとつずつ選んで、プロ野球選手としての人生を歩もう。\n\n・練習で「経験点」をためて「能力アップ」で能力を上げる\n・オフは自由。先輩と食事、デート、趣味、帰省、取材…出会いや人間関係が人生を変える\n・体力が減るとケガをしやすく、充実度が下がると調子を崩しやすい\n・2軍で結果を出して首脳陣の評価を上げると1軍昇格\n・シーズン中は1試合ずつ「この試合で意識すること」を選べる（作戦と相手との相性で結果が変わる）\n・オフには契約更改。活躍すれば年俸アップ！\n・恋愛、結婚、子育て、引っ越し…引退後の人生まで、すべてはあなた次第\n\nめざせ、名球会。そして最高の人生！',
     );
     log(s, `${team.name}にドラフト${rank}位で入団！`, 'good');
     return s;
@@ -103,6 +105,7 @@
 
   G.genLeaders = (s) => {
     const p = s.player;
+    if (p.league === 'mlb') return G.mlbLeaders(s);
     const league = G.teamById(p.teamId).league;
     const others = G.TEAMS.filter((t) => t.league === league && t.id !== p.teamId);
     const mk = (final) => ({ name: G.randomMaleName(), team: G.pick(others).short, final });
@@ -230,11 +233,15 @@
       if (pm) results.push(pm);
     }
     for (const r of results) log(s, r);
-    G.endWeek(s);
+    // シーズン中は試合へ（1試合ずつ作戦を選べる）
+    if (G.phaseOf(s.week).id === 'season' && G.gamesInWeek(s.week) > 0) {
+      G.startGames(s);
+      G.stepGames(s, null);
+    } else G.endWeek(s, null);
   };
 
   // ---------- 週の処理 ----------
-  G.endWeek = (s) => {
+  G.endWeek = (s, gw) => {
     const p = s.player;
     const phase = G.phaseOf(s.week).id;
     const ov = G.overall(p);
@@ -257,7 +264,7 @@
       }
       p.trust = G.clamp(p.trust + delta + (ov - 48) * 0.1, 0, 100);
     } else if (phase === 'season') {
-      G.weekSeason(s);
+      G.weekSeason(s, gw || G.simWeekGames(s));
     } else if (phase === 'camp' || phase === 'fall' || phase === 'jan') {
       p.trust = G.clamp(p.trust + (ov - 48) * 0.06, 0, 100);
     }
@@ -321,11 +328,10 @@
     }
   };
 
-  G.weekSeason = (s) => {
+  G.weekSeason = (s, gw) => {
     const p = s.player;
-    const n = G.gamesInWeek(s.week);
-    const before = { ...s.standings[p.teamId] };
-    const r = G.simWeekGames(s, n);
+    const before = gw.before;
+    const r = { ...gw.acc, games: gw.games };
     G.addStats(s.stats.bat, r.weekBat);
     G.addStats(s.stats.pit, r.weekPit);
     G.addStats(s.farm.bat, r.farmBat);
@@ -398,14 +404,16 @@
       if (G.isPitcher(p)) G.assignRole(s);
       const first = !s.flags.firstPromotion;
       s.flags.firstPromotion = true;
-      scene(s, '1軍昇格！', first ? `監督「${p.name}、明日から1軍だ。思い切ってやってこい！」\n\nついに念願の1軍昇格！` : '再び1軍に呼ばれた！今度こそ結果を残すぞ！', { big: '1軍昇格' });
-      log(s, '1軍に昇格した！', 'good');
+      const up = G.squadName(p, 'first');
+      scene(s, `${up}昇格！`, first ? `監督「${p.name}、明日から${up}だ。思い切ってやってこい！」\n\nついに念願の${up}昇格！` : `再び${up}に呼ばれた！今度こそ結果を残すぞ！`, { big: `${up}昇格` });
+      log(s, `${up}に昇格した！`, 'good');
       if (first) s.history.push({ year: s.year, text: '初の1軍昇格' });
     } else if (p.squad === 'first' && p.trust < 25) {
       p.squad = 'second';
       p.trust = 35;
-      scene(s, '2軍降格', '監督「しばらく2軍で調整してこい」\n\n悔しいが、2軍で鍛え直そう…。');
-      log(s, '2軍に降格した…', 'bad');
+      const down = G.squadName(p, 'second');
+      scene(s, `${down}降格`, `監督「しばらく${down}で調整してこい」\n\n悔しいが、${down}で鍛え直そう…。`);
+      log(s, `${down}に降格した…`, 'bad');
     }
 
     // 投手の役割見直し
@@ -478,11 +486,13 @@
       }
     }
     if (w === G.SEASON_END) G.seasonEnd(s);
-    if (w === 39) G.climaxSeries(s);
-    if (w === 40) G.japanSeries(s);
+    const mlb = G.isMLB(s);
+    if (w === 39) (mlb ? G.mlbPostseason : G.climaxSeries)(s);
+    if (w === 40) (mlb ? G.worldSeries : G.japanSeries)(s);
     if (w === 43) G.awards(s);
-    if (w === 45) G.releaseCheck(s);
-    if (w === 46 && !s.ended) G.faCheck(s);
+    if (w === 45) (mlb ? G.mlbReleaseCheck : G.releaseCheck)(s);
+    if (w === 46 && !s.ended && !s.retired && !mlb) G.faCheck(s);
+    if (w === 46 && !s.ended && !s.retired && !mlb && !s.queue.some((q) => q.kind === 'fa')) G.mlbCheck(s);
     if (w === 47 && !s.ended && !s.flags.releasedThisYear && s.flags.skipContract !== s.year) G.contractScene(s);
     if (w === 52) {
       scene(s, `${s.year}年 終了`, `${s.year}年が終わる。\n\n${G.seasonSummaryText(s)}\n\n来年はもっと活躍するぞ！`);
@@ -527,11 +537,12 @@
       if (st.s >= L.s.final) won.push('最多セーブ');
       if (st.hld >= L.hld.final) won.push('最優秀中継ぎ');
     }
+    if (G.isMLB(s)) won.forEach((t, i) => (won[i] = `MLB${t}`));
     for (const t of won) s.titles.push({ year: s.year, name: t });
     p.popularity = G.clamp(p.popularity + won.length * 6, 0, 100);
     let text = `ペナントレースが終了した。\n${G.teamById(p.teamId).name}は${rank}位。`;
     if (rank === 1) {
-      text += '\n\n🎉 リーグ優勝！！ 🎉';
+      text += G.isMLB(s) ? '\n\n🎉 地区優勝！！ 🎉' : '\n\n🎉 リーグ優勝！！ 🎉';
       s.history.push({ year: s.year, text: 'チームがリーグ優勝' });
       s.flags.pennant = s.year;
     }
@@ -622,10 +633,21 @@
       if (st.g >= 100 && p.batter.fielding >= need && G.chance(0.75)) won.push('ゴールデングラブ賞');
       if (st.pa >= 300) s.flags.rookieEligible = false;
     }
+    if (G.isMLB(s)) {
+      const map = { MVP: 'MLB MVP', 新人王: 'MLB新人王', ベストナイン: G.isPitcher(p) ? 'サイ・ヤング賞' : 'シルバースラッガー賞', ゴールデングラブ賞: 'ゴールドグラブ賞' };
+      const rookie = s.flags.mlbRookie;
+      for (let i = won.length - 1; i >= 0; i--) {
+        if (won[i] === '沢村賞' || (won[i] === '新人王' && !rookie)) won.splice(i, 1);
+        else if (map[won[i]]) won[i] = map[won[i]];
+      }
+      if (rookie && war >= 2.5 && !won.includes('MLB新人王')) won.push('MLB新人王');
+      const cy = won.indexOf('サイ・ヤング賞');
+      if (cy >= 0 && war < 5.5) won.splice(cy, 1);
+    }
     if (!won.length) return;
     for (const t of won) s.titles.push({ year: s.year, name: t });
     p.popularity = G.clamp(p.popularity + won.length * 4, 0, 100);
-    scene(s, '表彰式', `NPBアワーズで表彰された！\n\n🏆 ${won.join('\n🏆 ')}`, { big: won[0] });
+    scene(s, '表彰式', `${G.isMLB(s) ? 'シーズンの表彰' : 'NPBアワーズ'}で表彰された！\n\n🏆 ${won.join('\n🏆 ')}`, { big: won[0] });
     for (const t of won) log(s, `${t}を受賞！`, 'good');
   };
 
@@ -656,7 +678,7 @@
     if (s.flags.faYear && s.year - s.flags.faYear < 4) return;
     const war = G.seasonWAR(p, s);
     if (war < 1.5) return;
-    const offers = G.shuffle(G.TEAMS.filter((t) => t.id !== p.teamId))
+    const offers = G.shuffle(G.NPB_TEAMS().filter((t) => t.id !== p.teamId))
       .slice(0, G.ri(1, 3))
       .map((t) => ({ teamId: t.id, salary: Math.round((p.salary * G.rf(1.2, 1.7) + war * 500) / 10) * 10 }));
     s.flags.faYear = s.year;
@@ -688,15 +710,17 @@
       s.queue.push({ kind: 'forced_retire', title: '現役引退', text: `${p.age}歳。体はもう限界だ…。\n長く続けてきた現役生活に別れを告げる時が来た。` });
       return;
     }
-    const offer = G.contractTarget(s);
+    const mlb = G.isMLB(s);
+    const offer = mlb ? G.mlbContractTarget(s) : G.contractTarget(s);
     s.tmp.offer = offer;
     const diff = offer - p.salary;
     const sign = diff >= 0 ? '+' : '';
     s.queue.push({
       kind: 'contract',
-      title: '契約更改',
-      text: `球団との契約更改交渉。\n\n今季：${G.fmtMoney(p.salary)}\n提示：${G.fmtMoney(offer)}（${sign}${G.fmtMoney(diff)}）\n\n${G.seasonSummaryText(s)}`,
+      title: mlb ? '契約交渉' : '契約更改',
+      text: `${mlb ? '代理人を通じた契約交渉。' : '球団との契約更改交渉。'}\n\n今季：${G.fmtMoney(p.salary)}\n提示：${G.fmtMoney(offer)}（${sign}${G.fmtMoney(diff)}）${mlb ? `\n（${G.usdText(offer)}）` : ''}\n\n${G.seasonSummaryText(s)}`,
       canRetire: p.age >= 30,
+      mlb,
     });
   };
 
@@ -709,6 +733,7 @@
     if (q.kind === 'contract') {
       const c = ['サインする', '粘って交渉する'];
       if (q.canRetire) c.push('現役を引退する');
+      if (q.mlb) c.push('日本球界に復帰する');
       return c;
     }
     if (q.kind === 'release') return ['トライアウトを受ける', '現役を引退する'];
@@ -748,6 +773,9 @@
           p.trust = Math.max(0, p.trust - 4);
           text = `「これ以上は出せない」…結局${G.fmtMoney(p.salary)}でサインした。球団の印象が少し悪くなった。`;
         }
+      } else if (G.sceneChoices(s, q)[idx] === '日本球界に復帰する') {
+        s.queue.unshift({ kind: 'life', id: 'npb_return', title: '日本復帰', text: '日本の球団からオファーが届いている。', data: { offers: G.npbOffers(s) } });
+        return;
       } else {
         G.retire(s, '自らの意思で現役を引退した');
         return;
@@ -758,7 +786,7 @@
         const ov = G.overall(p);
         const pr = G.clamp((ov - 35) / 40, 0.1, 0.8) - Math.max(0, p.age - 33) * 0.05;
         if (G.chance(pr)) {
-          const team = G.pick(G.TEAMS.filter((t) => t.id !== p.teamId));
+          const team = G.pick(G.NPB_TEAMS().filter((t) => t.id !== p.teamId));
           const from = G.teamById(p.teamId).name;
           p.teamId = team.id;
           p.salary = Math.max(440, Math.round((p.salary * 0.5) / 10) * 10);
@@ -806,6 +834,8 @@
   G.newYear = (s) => {
     const p = s.player;
     G.pushCareer(s);
+    G.updateDraftClass(s);
+    if (p.league === 'mlb' && s.flags.mlbStart <= s.year) s.flags.mlbRookie = false;
     s.year++;
     s.week = 1;
     p.age++;

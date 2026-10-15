@@ -161,6 +161,8 @@
       }
       for (let i = 0; i < oldKids; i++) p.kids.push({ name: G.pick(['ゆうと', 'はると', 'さくら', 'ひなた', 'そうた', 'めい']), born: s.year - 1, bond: 50, baseball: null });
     }
+    if (G.ensureTeams) G.ensureTeams(s);
+    if (!s.draft && G.genDraftClass) G.genDraftClass(s);
     delete p.married;
     delete p.girlfriend;
     delete p.children;
@@ -383,6 +385,7 @@
       let reason = a.req ? a.req(s) : '';
       if (!reason && a.cost && p.money < a.cost) reason = 'お金が足りない';
       if (!reason && p.injury && ['selfpractice', 'gym', 'nightlife', 'travel'].includes(a.id)) reason = 'ケガの治療中';
+      if (!reason && s.after && ['selfpractice', 'coach'].includes(a.id)) reason = '現役のときだけ';
       return { id: a.id, place: a.place, name: resolveField(a.name, s), desc: resolveField(a.desc, s), cost: a.cost || 0, reason, ok: !reason };
     });
   };
@@ -655,11 +658,24 @@
       if (age === 6) scene(s, '入学式', `${k.name}が小学校に入学した。大きなランドセルを背負った姿に、思わず目頭が熱くなる。\n\n` + fx(s, { happy: 6 }));
       if (age === 7 && k.baseball === null) lifeScene(s, 'kid_baseball', '子供と野球', `${k.name}「パパ、ぼくも野球やってみたい！」`, { name: k.name });
       if (age === 12 && k.baseball) scene(s, '少年野球', `${k.name}が少年野球チームでレギュラーになった！ 週末は試合の応援に行くのが楽しみだ。\n\n` + fx(s, { happy: 6 }));
+      if (age === 18 && k.baseball) {
+        const pr = G.clamp(0.15 + k.bond * 0.004 + Math.max(0, G.careerTotals(s).war) * 0.003, 0.1, 0.7);
+        if (G.chance(pr)) {
+          const team = G.pick(G.NPB_TEAMS());
+          const round = G.ri(1, 5);
+          k.pro = { team: team.id, round, year: s.year };
+          s.history.push({ year: s.year, text: `${k.name}が${team.name}からドラフト${round}位指名` });
+          scene(s, '親子二代のプロ野球選手', `ドラフト会議で、${k.name}の名前が呼ばれた。\n「第${round}巡選択希望選手 ${team.name}……${k.name}」\n\n${k.name}がプロ野球選手になる！\n「父さんの背中を見て、ここまで来たよ」`, { big: '親子でプロへ' });
+          G.addHappy(s, 20);
+        } else {
+          scene(s, '進路', `${k.name}はドラフトで指名されなかったが、大学で野球を続けてプロを目指すことにした。「4年後、必ず」`);
+        }
+      }
       if (age === 16 && k.baseball) scene(s, '甲子園を目指して', `${k.name}が野球の強豪高校に進学した。「父さんを超える選手になる」と意気込んでいる。\n\n` + fx(s, { happy: 6 }));
     }
-    // ライバルの1年
+    // ライバルの1年（ドラフト同期のデータがあればそちらで管理）
     const r = P.rival;
-    if (!r.retired) {
+    if (!r.retired && !s.draft) {
       const ageF = p.age <= 24 ? 0.6 : p.age <= 32 ? 1 : 0.5;
       const war = Math.max(-0.5, G.gauss(2.2, 1.8) * ageF);
       r.war = Math.round((r.war + war) * 10) / 10;
@@ -829,7 +845,14 @@
     second_career: {
       choices: (s) => {
         const war = G.careerTotals(s).war;
-        return G.SECOND_CAREERS.filter((c) => c.req(s, war)).map((c) => ({ label: c.name, run: (s2) => { G.finishLife(s2, c.id); return null; } }));
+        return G.SECOND_CAREERS.filter((c) => c.req(s, war)).map((c) => ({
+          label: c.name,
+          run: (s2) => {
+            s2.secondCareer = c.id;
+            s2.queue.unshift({ kind: 'life', id: 'continue_choice', title: 'これからの人生', text: `「${c.name}」——それが、次の夢だ。\n\nこの先の人生も、自分の手で歩んでみる？`, data: {} });
+            return null;
+          },
+        }));
       },
     },
   };
