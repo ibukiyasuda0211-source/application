@@ -390,6 +390,14 @@
   A('people', 'rivalAcademy', 'ふたりの夢', 'ライバルと野球アカデミーを作った', (c) => chainDone(c, 'rival_academy'), { hidden: true });
   A('people', 'kohaiStar', '後輩の晴れ舞台', '育てた後輩がタイトルを獲った', (c) => chainDone(c, 'kohai_star'));
   A('people', 'chains10', 'つながりの人生', '人間関係の「つながり」を10個達成した', (c) => Object.keys(c.s.chain || {}).length >= 10, { hidden: true });
+  const mates = (c) => Object.values(c.s.people).filter((x) => x.group === 'mate');
+  A('people', 'talk1', '話しかけてみる', 'チームメイトに自分から話しかけた', (c) => (c.s.story.talks || 0) >= 1);
+  A('people', 'talk50', '社交家', 'チームメイトと50回話した', (c) => (c.s.story.talks || 0) >= 50);
+  A('people', 'mate1', '新しい仲間', 'チームメイトと打ち解けて、人間関係に加わった', (c) => mates(c).length >= 1 || c.hist(/と打ち解ける/));
+  A('people', 'mate3', 'ロッカールームの輪', '仲良くなったチームメイトが3人に', (c) => mates(c).length >= 3);
+  A('people', 'mateBest', '戦友', 'チームメイトとの仲が80以上に', (c) => mates(c).some((x) => x.aff >= 80));
+  A('people', 'mateMeal', '同じ釜の飯', 'チームメイトを10回食事に誘った', (c) => (c.s.story.mealsWithMates || 0) >= 10);
+  A('people', 'drift', '疎遠', '仲の良かったチームメイトと疎遠になった', (c) => c.seen('疎遠'), { bitter: true });
   A('people', 'senpaiDinner', '先輩にごちそうさま', '先輩と10回食事に行った', (c) => c.priv('senpai') >= 10);
   A('people', 'kohaiTreat', '後輩思い', '後輩に10回おごった', (c) => c.priv('kohai') >= 10);
   A('people', 'rivalRetire', 'ライバルの引退', '同期のライバルがユニフォームを脱いだ', (c) => c.seen('ライバルの引退') || c.hist(/ライバル.*引退/));

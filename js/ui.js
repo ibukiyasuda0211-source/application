@@ -910,7 +910,12 @@
     const R = G.ensureRoster(s);
     G.assignTeamRoles(s);
     const team = G.teamById(p.teamId);
-    const tag = (m) => (G.mateTag(m) ? `<span class="tag friend">${G.mateTag(m)}</span>` : '') + (m.rookie ? '<span class="tag">新人</span>' : '') + (m.injured ? '<span class="tag injury">故障</span>' : '');
+    const tag = (m) =>
+      (G.mateTag(m) ? `<span class="tag friend">${G.mateTag(m)}</span>` : '') +
+      (s.people[`tm_${m.id}`] ? '<span class="tag lover">仲間</span>' : '') +
+      (m.rookie ? '<span class="tag">新人</span>' : '') +
+      (m.injured ? '<span class="tag injury">故障</span>' : '');
+    const mateLink = (m) => `<button class="name-link" data-act="mate" data-arg="${m.id}">${esc(m.name)}</button>`;
     const batStat = (st) => (st.pa ? `${G.fmtRate(st.h, st.ab)}・${st.hr}本・${st.rbi}点` : '-');
     const pitStat = (st) => (st.g ? `${st.g}登板 ${st.w}勝${st.l}敗${st.s ? ` ${st.s}S` : ''}${st.hld ? ` ${st.hld}H` : ''} 防${G.fmtERA(st.er, st.outs)}` : '-');
     // レギュラー争い
@@ -929,7 +934,7 @@
           return `<tr class="me"><td>${r.slot}番</td><td style="text-align:left">${esc(p.name)}（あなた）</td><td>${G.posById(p.position).name}</td><td>${rankBadge(Math.round(G.overall(p)))}</td><td>${batStat(st)}</td></tr>`;
         }
         const m = r.m;
-        return `<tr><td>${r.slot}番</td><td style="text-align:left">${esc(m.name)} ${tag(m)}</td><td>${G.posById(m.pos).name}</td><td>${rankBadge(m.rating)}</td><td>${batStat(m.stats.bat)}</td></tr>`;
+        return `<tr><td>${r.slot}番</td><td style="text-align:left">${mateLink(m)} ${tag(m)}</td><td>${G.posById(m.pos).name}</td><td>${rankBadge(m.rating)}</td><td>${batStat(m.stats.bat)}</td></tr>`;
       })
       .join('');
     const pitcherSlot = '<tr><td>9番</td><td style="text-align:left" class="muted">（先発投手）</td><td>投手</td><td></td><td></td></tr>';
@@ -939,19 +944,20 @@
       .sort((a, b) => ({ regular: 0, bench: 1, farm: 2 }[a.role] - { regular: 0, bench: 1, farm: 2 }[b.role] || b.rating - a.rating))
       .map((m) => {
         const pct = G.fieldingPct(m.stats.fld);
-        return `<tr><td style="text-align:left">${esc(m.name)} ${tag(m)}</td><td>${G.posById(m.pos).name}</td><td>${m.age}</td><td>${rankBadge(m.rating)}</td><td>${G.rank(m.prof.contact)}/${G.rank(m.prof.power)}/${G.rank(m.prof.speed)}/${G.rank(m.prof.fielding)}</td><td>${G.TEAM_ROLE_NAME[m.role]}</td><td>${batStat(m.stats.bat)}</td><td>${pct === null ? '-' : pct.toFixed(3).replace(/^0/, '')}${m.stats.fld.e ? `（失${m.stats.fld.e}）` : ''}</td></tr>`;
+        return `<tr><td style="text-align:left">${mateLink(m)} ${tag(m)}</td><td>${G.posById(m.pos).name}</td><td>${m.age}</td><td>${rankBadge(m.rating)}</td><td>${G.rank(m.prof.contact)}/${G.rank(m.prof.power)}/${G.rank(m.prof.speed)}/${G.rank(m.prof.fielding)}</td><td>${G.TEAM_ROLE_NAME[m.role]}</td><td>${batStat(m.stats.bat)}</td><td>${pct === null ? '-' : pct.toFixed(3).replace(/^0/, '')}${m.stats.fld.e ? `（失${m.stats.fld.e}）` : ''}</td></tr>`;
       })
       .join('');
     const roleOrder = { SP: 0, CL: 1, setup: 2, mid: 3, mop: 4, farm: 5 };
     const pitchers = R.players
       .filter((m) => m.pos === 'P')
       .sort((a, b) => roleOrder[a.role] - roleOrder[b.role] || b.rating - a.rating)
-      .map((m) => `<tr><td style="text-align:left">${esc(m.name)} ${tag(m)}</td><td>${G.TEAM_ROLE_NAME[m.role] || '中継ぎ'}</td><td>${m.age}</td><td>${rankBadge(m.rating)}</td><td>${m.prof.velocity}km/h</td><td style="text-align:left">${pitStat(m.stats.pit)}</td></tr>`)
+      .map((m) => `<tr><td style="text-align:left">${mateLink(m)} ${tag(m)}</td><td>${G.TEAM_ROLE_NAME[m.role] || '中継ぎ'}</td><td>${m.age}</td><td>${rankBadge(m.rating)}</td><td>${m.prof.velocity}km/h</td><td style="text-align:left">${pitStat(m.stats.pit)}</td></tr>`)
       .join('');
     const meP = G.isPitcher(p) && !s.retired ? `<tr class="me"><td style="text-align:left">${esc(p.name)}（あなた）</td><td>${p.squad === 'first' ? G.roleName(p) : G.squadName(p)}</td><td>${p.age}</td><td>${rankBadge(Math.round(G.overall(p)))}</td><td>${p.pitcher.velocity}km/h</td><td style="text-align:left">${pitStat(s.stats.pit)}</td></tr>` : '';
     const departed = R.departed && R.departed.length ? `<p class="muted" style="font-size:13px">昨オフにチームを去った選手：${R.departed.map((d) => `${esc(d.name)}（${esc(d.why)}）`).join('、')}</p>` : '';
     return `<div class="panel">
       <h3><span class="team-chip" style="background:${team.color}">${team.short}</span> ${team.name}</h3>
+      <p class="muted" style="font-size:13px;margin-top:-4px">選手の名前を押すと、くわしい情報を見たり話しかけたりできる（週${G.TALKS_PER_WEEK}回まで）。仲良くなると「人間関係」に加わる。親しくできるのは${G.friendCap(s)}人まで（いま${G.mateFriends(s).length}人）。</p>
       ${rivalBox}
       <h3 class="mt">いまのスタメン</h3>
       <div class="tbl-wrap"><table class="stats"><tr><th>打順</th><th>選手</th><th>守備</th><th>総合</th><th>今季</th></tr>${lu}${pitcherSlot}</table></div>
@@ -1006,23 +1012,37 @@
     const f = ui.draftFilter || 'all';
     const tot = G.careerTotals(s);
     const meStatus = s.ended || s.retired ? '引退' : p.league === 'mlb' ? (p.squad === 'first' ? 'MLB' : 'マイナー') : p.squad === 'first' ? '1軍' : '2軍';
+    const counts = {};
     const rows = s.draft.picks
       .filter((d) => f === 'all' || (f === 'r1' && d.round === 1) || (f === 'team' && d.teamId === G.draftTeamOf(s)) || (f === 'active' && (d.me ? !s.retired : !d.retired)))
       .map((d) => {
         const team = G.teamById(d.teamId);
+        const gradeTd = (gr) => `<td><span class="dgrade g${gr.g}" title="${esc(gr.name)}：${esc(gr.desc)}">${gr.g}</span></td>`;
         if (d.me) {
-          const line = G.isPitcher(p) ? `${tot.pit.g}登板 ${tot.pit.w}勝${tot.pit.s}S 防${G.fmtERA(tot.pit.er, tot.pit.outs)}` : `${tot.bat.g}試合 ${tot.bat.h}安打 ${tot.bat.hr}本 率${G.fmtRate(tot.bat.h, tot.bat.ab)}`;
-          return `<tr class="me"><td>${d.round}位</td><td style="text-align:left"><span class="team-chip" style="background:${team.color}">${team.short}</span></td><td style="text-align:left">${esc(p.name)}（あなた）</td><td>${G.posById(p.position).name}</td><td>${p.age}</td><td><span class="st ${G.draftStatusClass(meStatus)}">${meStatus}</span></td><td style="text-align:left">${line}</td><td>${tot.war.toFixed(1)}</td><td style="text-align:left">-</td></tr>`;
+          const live = s.retired ? 0 : G.seasonWAR(p, s);
+          const war = Math.round((tot.war + live) * 10) / 10;
+          const cb = { ...tot.bat };
+          const cp = { ...tot.pit };
+          if (!s.retired) {
+            G.addStats(cb, s.stats.bat);
+            G.addStats(cp, s.stats.pit);
+          }
+          const line = G.isPitcher(p) ? `${cp.g}登板 ${cp.w}勝${cp.s}S 防${G.fmtERA(cp.er, cp.outs)}` : `${cb.g}試合 ${cb.h}安打 ${cb.hr}本 率${G.fmtRate(cb.h, cb.ab)}`;
+          const best = s.career.some((c) => (G.isPitcher(p) ? c.pit.outs >= 300 || c.pit.g >= 40 : c.bat.pa >= 300)) ? '1軍主力' : '';
+          const gr = G.draftGrade(war, meStatus === '1軍' && (G.isPitcher(p) ? s.stats.pit.outs >= 150 : p.usage && p.usage.status === 'starter') ? '1軍主力' : meStatus, best);
+          counts[gr.g] = (counts[gr.g] || 0) + 1;
+          return `<tr class="me">${gradeTd(gr)}<td>${d.round}位</td><td style="text-align:left"><span class="team-chip" style="background:${team.color}">${team.short}</span></td><td style="text-align:left">${esc(p.name)}（あなた）</td><td>${G.posById(p.position).name}</td><td>${p.age}</td><td><span class="st ${G.draftStatusClass(meStatus)}">${meStatus}</span></td><td style="text-align:left">${line}</td><td>${war.toFixed(1)}</td><td style="text-align:left">${s.retired ? '-' : `今季：${esc(G.seasonSummaryText(s).replace(/^1軍成績：|^今季は/, ''))}`}</td></tr>`;
         }
-        const t = d.tot;
+        const L = G.draftLive(s, d);
+        const t = L;
+        counts[L.grade.g] = (counts[L.grade.g] || 0) + 1;
         const line = d.pos === 'P' ? (t.pit.g ? `${t.pit.g}登板 ${t.pit.w}勝${t.pit.s}S 防${G.fmtERA(t.pit.er, t.pit.outs)}` : '1軍登板なし') : t.bat.g ? `${t.bat.g}試合 ${t.bat.h}安打 ${t.bat.hr}本 率${G.fmtRate(t.bat.h, t.bat.ab)}` : '1軍出場なし';
         let last = '-';
-        if (d.last) {
-          const l = d.last;
-          last = d.pos === 'P' ? (l.pit.g ? `${l.pit.w}勝${l.pit.s}S 防${G.fmtERA(l.pit.er, l.pit.outs)}` : '出場なし') : l.bat.g ? `率${G.fmtRate(l.bat.h, l.bat.ab)} ${l.bat.hr}本` : '出場なし';
-        }
+        const fmtLine = (l) => (d.pos === 'P' ? (l.pit.g ? `${l.pit.g}登板 ${l.pit.w}勝${l.pit.s}S 防${G.fmtERA(l.pit.er, l.pit.outs)}` : '1軍出場なし') : l.bat.g ? `${l.bat.g}試合 率${G.fmtRate(l.bat.h, l.bat.ab)} ${l.bat.hr}本` : '1軍出場なし');
+        if (L.season) last = `今季：${fmtLine(L.season)}<br><small class="muted">チームメイト（${G.TEAM_ROLE_NAME[L.season.role] || ''}）</small>`;
+        else if (d.last) last = `${d.last.year}年：${fmtLine(d.last)}`;
         const rival = d.id === s.draft.rivalId ? ' <span class="tag friend">ライバル</span>' : '';
-        return `<tr><td>${d.round}位</td><td style="text-align:left"><span class="team-chip" style="background:${team.color}">${team.short}</span></td><td style="text-align:left">${esc(d.name)}${rival}</td><td>${G.posById(d.pos).name}</td><td>${d.age}</td><td><span class="st ${G.draftStatusClass(d.status)}">${esc(d.status)}</span></td><td style="text-align:left">${line}</td><td>${d.war.toFixed(1)}</td><td style="text-align:left">${last}${d.note ? `<br><small class="muted">${esc(d.note)}</small>` : ''}</td></tr>`;
+        return `<tr>${gradeTd(L.grade)}<td>${d.round}位</td><td style="text-align:left"><span class="team-chip" style="background:${team.color}">${team.short}</span></td><td style="text-align:left">${esc(d.name)}${rival}</td><td>${G.posById(d.pos).name}</td><td>${d.age}</td><td><span class="st ${G.draftStatusClass(L.status)}">${esc(L.status)}</span></td><td style="text-align:left">${line}</td><td>${L.war.toFixed(1)}</td><td style="text-align:left">${last}${d.note ? `<br><small class="muted">${esc(d.note)}</small>` : ''}</td></tr>`;
       })
       .join('');
     const filters = [['all', '全員'], ['r1', '1位指名'], ['team', '同じ球団'], ['active', '現役のみ']]
@@ -1030,9 +1050,11 @@
       .join('');
     const active = s.draft.picks.filter((d) => (d.me ? !s.retired : !d.retired)).length;
     return `<div class="panel"><h3>${s.draft.year}年 ドラフト会議 <span class="muted" style="font-size:13px">指名${s.draft.picks.length}人・現役${active}人</span></h3>
-      <p class="muted" style="font-size:13px;margin-top:0">同じ年にプロ入りした同期たちの現在。成績は毎年のシーズン終了後に更新されます。</p>
+      <p class="muted" style="font-size:13px;margin-top:0">同じ年にプロ入りした同期たちの現在。ほかの球団の同期は毎年のシーズン終了後に更新、同じチームの同期はチームメイトとしての今季の成績も含めて表示します。</p>
       <div class="places">${filters}</div>
-      <div class="tbl-wrap"><table class="stats draft-table"><tr><th>順位</th><th>球団</th><th>選手</th><th>守備</th><th>年齢</th><th>状態</th><th>通算成績（1軍）</th><th>WAR</th><th>昨季</th></tr>${rows}</table></div>
+      <div class="dgrade-legend">${G.DRAFT_GRADES.map((x) => `<span><span class="dgrade g${x.g}">${x.g}</span>${x.name}<small class="muted">${x.desc}</small><b>${counts[x.g] || 0}人</b></span>`).join('')}</div>
+      <div class="tbl-wrap"><table class="stats draft-table"><tr><th>評価</th><th>順位</th><th>球団</th><th>選手</th><th>守備</th><th>年齢</th><th>状態</th><th>通算成績（1軍）</th><th>WAR</th><th>直近</th></tr>${rows}</table></div>
+      <p class="muted" style="font-size:12px">評価：通算WAR（どれだけチームの勝ちに貢献したか）と、いまの立場から決まる。S＝大当たり（通算WAR25以上など）、A＝当たり、B＝1軍の戦力、C＝1軍で出番あり、D＝まだこれから。</p>
     </div>`;
   };
 
@@ -1121,11 +1143,14 @@
     const rival = P.rival;
     const rivalNote = `<small class="muted">通算WAR ${rival.war.toFixed(1)}${rival.best ? `・${esc(rival.best)}` : ''}</small>`;
     const others = ['parents', 'friend', 'reporter'].map((id) => P[id]).filter((x) => x.met);
+    const mates = G.mateFriends(s);
     const love = G.heroines(s).filter((h) => h.met);
     const unmet = G.heroines(s).filter((h) => !h.met).length;
     const pt = G.partner(s);
     return `<div class="panel">
       <h3>チーム</h3><div class="people">${team.map((x) => card(x, x.id === 'rival' ? rivalNote : '')).join('')}</div>
+      <h3 class="mt">仲良くなったチームメイト <span class="muted" style="font-size:12px">${mates.length}/${G.friendCap(s)}人</span></h3>
+      ${mates.length ? `<div class="people">${mates.map((x) => card(x, `<small class="muted">性格：${esc(G.personaById(x.persona).name)}</small>`)).join('')}</div>` : '<p class="muted" style="font-size:13px">「チーム」タブで選手の名前を押して話しかけてみよう。気の合う仲間ができるかもしれない。</p>'}
       <h3 class="mt">家族・友人・仕事</h3><div class="people">${others.map((x) => card(x)).join('')}</div>
       <h3 class="mt">恋愛</h3>
       ${love.length ? `<div class="people">${love.map((h) => card(h, s.story[`liked_${h.id}`] || h.dates >= 3 ? `<small class="muted">好み：${esc({ quiet: '落ち着いたデート', active: 'アクティブなデート', luxury: 'おしゃれなディナー', casual: '気軽なデート' }[G.heroineType(h).likes])}</small>` : '')).join('')}</div>` : '<p class="muted">まだ特別な出会いはない。</p>'}
@@ -1525,6 +1550,42 @@
     </div>`;
   };
 
+  // ---------- チームメイトの詳細と交流 ----------
+  const mateModal = (s) => {
+    const R = s.roster;
+    const m = R && R.players.find((x) => x.id === ui.mate);
+    if (!m) return '';
+    const p = s.player;
+    const info = G.mateInfo(s, m);
+    const per = info.persona;
+    const pit = m.pos === 'P';
+    const st = m.stats;
+    const season = pit
+      ? st.pit.g ? `${st.pit.g}登板 ${st.pit.w}勝${st.pit.l}敗${st.pit.s ? ` ${st.pit.s}S` : ''}${st.pit.hld ? ` ${st.pit.hld}H` : ''} 防御率${G.fmtERA(st.pit.er, st.pit.outs)}` : 'まだ登板なし'
+      : st.bat.pa ? `${st.bat.g}試合 打率${G.fmtRate(st.bat.h, st.bat.ab)} ${st.bat.hr}本 ${st.bat.rbi}打点` : 'まだ出場なし';
+    const last = m.last ? (pit ? (m.last.pit.g ? `${m.last.pit.g}登板 ${m.last.pit.w}勝 防御率${G.fmtERA(m.last.pit.er, m.last.pit.outs)}` : '1軍登板なし') : m.last.bat.pa ? `打率${G.fmtRate(m.last.bat.h, m.last.bat.ab)} ${m.last.bat.hr}本` : '1軍出場なし') : '-';
+    const prof = pit
+      ? `球速${m.prof.velocity}km/h・制球${G.rank(m.prof.control)}・スタミナ${G.rank(m.prof.stamina)}`
+      : `ミート${G.rank(m.prof.contact)}・パワー${G.rank(m.prof.power)}・走力${G.rank(m.prof.speed)}・守備${G.rank(m.prof.fielding)}`;
+    const aff = Math.round(info.aff);
+    const level = info.person ? (aff >= 70 ? '親友' : '仲間') : aff >= 25 ? '話す仲' : aff >= 10 ? '顔見知り' : 'あまり話したことがない';
+    const topics = G.TALK_TOPICS.map((t) => {
+      const why = G.canTalk(s, m, t.id);
+      return `<button class="act rest" data-act="mateTalk" data-arg="${t.id}" ${why ? 'disabled' : ''}><b>${t.name}</b><small>${t.desc}</small>${why ? `<small class="why">${esc(why)}</small>` : ''}</button>`;
+    }).join('');
+    const tagName = G.mateTag(m);
+    return `<div class="modal-back" data-act="mateClose"><div class="modal mate-modal" role="dialog" aria-modal="true" data-stop="1">
+      <div class="modal-title">${esc(m.name)} ${tagName ? `<span class="tag friend">${tagName}</span>` : ''}</div>
+      <div class="mate-head"><div class="num">${m.number}</div><div><b>${G.posById(m.pos).name}・${m.age}歳</b><div class="muted" style="font-size:13px">${G.TEAM_ROLE_NAME[m.role] || ''}・総合 ${G.rank(m.rating)}</div></div></div>
+      <dl class="kv mate-kv"><dt>能力</dt><dd>${prof}</dd><dt>今季</dt><dd>${season}</dd><dt>昨季</dt><dd>${last}</dd>
+        <dt>性格</dt><dd>${info.known ? `${per.name}<small class="muted">（${per.hint}）</small>` : '？（何度か話すとわかる）'}</dd>
+        <dt>あなたとの仲</dt><dd><div class="bar aff"><div class="track"><div class="fill" style="width:${Math.min(100, aff)}%;background:#3b8ee0"></div></div><span class="val">${aff}</span></div><small class="muted">${level}${info.person ? '（人間関係に登録済み）' : `・仲${G.FRIEND_AFF}で人間関係に加わる`}</small></dd></dl>
+      ${s.retired || s.after ? '' : `<div class="section-title" style="margin-top:6px">話しかける</div><div class="act-grid">${topics}</div>`}
+      ${ui.mateMsg ? `<div class="mate-msg ${ui.mateMsg.tone || ''}">${br(ui.mateMsg.text)}</div>` : ''}
+      <div class="modal-choices"><button class="btn sub" data-act="mateClose">閉じる</button></div>
+    </div></div>`;
+  };
+
   // ================= 描画 =================
   const render = () => {
     let html;
@@ -1532,6 +1593,7 @@
     else if (ui.screen === 'game') html = gameView();
     else if (ui.screen === 'ending') html = endingView();
     else html = titleView();
+    if (ui.screen === 'game' && ui.mate && ui.s && !ui.s.queue.length) html += mateModal(ui.s);
     if (ui.confirm) {
       html += `<div class="modal-back"><div class="modal" role="dialog" aria-modal="true">
         <div class="modal-title">確認</div><div class="modal-text">${br(ui.confirm.text)}</div>
@@ -1657,6 +1719,25 @@
     raiseMU: (arg) => {
       if (!G.raiseMU(ui.s.player, arg)) toast('経験点が足りません');
       save();
+      render();
+    },
+    mate: (arg) => {
+      ui.mate = arg;
+      ui.mateMsg = null;
+      render();
+    },
+    mateTalk: (arg) => {
+      const s = ui.s;
+      const m = s.roster && s.roster.players.find((x) => x.id === ui.mate);
+      if (!m) return;
+      ui.mateMsg = G.talkTo(s, m, arg);
+      G.checkAch(s);
+      save();
+      render();
+    },
+    mateClose: (arg, el, e) => {
+      ui.mate = null;
+      ui.mateMsg = null;
       render();
     },
     achCat: (arg) => {
@@ -1891,6 +1972,8 @@
   };
 
   document.addEventListener('click', (e) => {
+    // モーダルの中身を押したときは、背景の「閉じる」を発火させない
+    if (e.target.closest('[data-stop]') && !e.target.closest('[data-stop] [data-act]')) return;
     const el = e.target.closest('[data-act]');
     if (!el || el.disabled) return;
     const h = handlers[el.dataset.act];

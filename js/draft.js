@@ -64,6 +64,14 @@
   };
 
   // 1シーズン分の成績をつくり、成長・引退を進める
+  // 自分のチームにいる同期は、チームメイトとしての実際の成績を使う（チームのタブと食い違わないように）
+  G.draftMateOf = (s, d) => {
+    const R = s.roster;
+    if (!R || !d || d.me || d.retired || d.league !== 'npb' || R.teamId !== d.teamId || s.player.league === 'mlb') return null;
+    return R.players.find((m) => m.draftId === d.id) || null;
+  };
+  G.mateStatus = (m) => (['regular', 'SP', 'CL', 'setup'].includes(m.role) ? '1軍主力' : ['bench', 'mid', 'mop'].includes(m.role) ? '1軍' : '2軍');
+
   G.updateDraftClass = (s) => {
     if (!s.draft) return;
     const year = s.year;
@@ -78,11 +86,20 @@
       let status = r >= 60 ? '1軍主力' : r >= 52 ? '1軍' : '2軍';
       if (d.league === 'mlb') status = r >= 64 ? 'MLB主力' : r >= 56 ? 'MLB' : 'マイナー';
       const fp = fakePlayer(d, r, d.league === 'mlb');
-      const bat = G.emptyBat();
-      const pit = G.emptyPit();
+      let bat = G.emptyBat();
+      let pit = G.emptyPit();
+      const mate = G.draftMateOf(s, d);
+      if (mate) {
+        // チームメイトとしての今季の成績そのもの
+        bat = { ...G.emptyBat(), ...mate.stats.bat };
+        pit = { ...G.emptyPit(), ...mate.stats.pit };
+        status = pit.outs >= 300 || pit.g >= 40 || bat.pa >= 300 ? '1軍主力' : bat.g || pit.g ? '1軍' : '2軍';
+      }
       const regular = /主力/.test(status);
       const bench = status === '1軍' || status === 'MLB';
-      if (d.pos === 'P') {
+      if (mate) {
+        // 成績は上で決まっている
+      } else if (d.pos === 'P') {
         const starter = r >= 55 && d.id % 2 === 0;
         if (regular || bench) {
           const apps = starter ? (regular ? 24 : 8) : regular ? 50 : 25;
@@ -132,6 +149,44 @@
         s.history.push({ year: s.year, text: `ライバル${rv.name}が引退` });
       }
     }
+  };
+
+  // 同期の「今」の評価（D〜S）。通算WARと今の立場から
+  G.DRAFT_GRADES = [
+    { g: 'S', name: '大当たり', desc: '球界を代表するスター' },
+    { g: 'A', name: '当たり', desc: 'チームの中心選手' },
+    { g: 'B', name: '戦力', desc: '1軍のレギュラー級' },
+    { g: 'C', name: '一軍半', desc: '1軍で出番をつかみ始めた' },
+    { g: 'D', name: 'まだこれから', desc: 'まだ目立った活躍はない' },
+  ];
+  G.draftGrade = (war, status, best) => {
+    const star = /主力/.test(status || '') || /主力/.test(best || '');
+    let g;
+    if (war >= 25 || (star && war >= 18)) g = 'S';
+    else if (war >= 12 || (star && war >= 7)) g = 'A';
+    else if (war >= 4 || star) g = 'B';
+    else if (war >= 0.8 || /1軍|MLB/.test(status || '') || /1軍|MLB/.test(best || '')) g = 'C';
+    else g = 'D';
+    return G.DRAFT_GRADES.find((x) => x.g === g);
+  };
+
+  // 表示用：自分のチームの同期は今季の成績も足した「いま」の姿
+  G.draftLive = (s, d) => {
+    const m = G.draftMateOf(s, d);
+    const bat = { ...d.tot.bat };
+    const pit = { ...d.tot.pit };
+    let war = d.war;
+    let status = d.status;
+    let season = null;
+    if (m) {
+      G.addStats(bat, m.stats.bat);
+      G.addStats(pit, m.stats.pit);
+      const fp = fakePlayer(d, d.rating, false);
+      war = Math.round((d.war + (d.pos === 'P' ? G.pitcherWAR(fp, m.stats.pit) : G.batterWAR(fp, m.stats.bat))) * 10) / 10;
+      status = G.mateStatus(m);
+      season = { bat: m.stats.bat, pit: m.stats.pit, role: m.role };
+    }
+    return { bat, pit, war, status, season, grade: G.draftGrade(war, status, d.best) };
   };
 
   G.draftTeamOf = (s) => s.draft.picks.find((x) => x.me).teamId;

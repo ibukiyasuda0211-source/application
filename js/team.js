@@ -56,8 +56,16 @@
     // ドラフト同期のチームメイトを入れる
     for (const d of draftMates) {
       const slot = players.find((m) => !used.has(m.id) && (d.pos === 'P' ? m.pos === 'P' && m.role !== 'CL' : m.pos === d.pos || (d.pos === 'OF' && m.pos === 'OF')));
-      if (!slot) continue;
-      Object.assign(slot, { name: d.name, age: d.age, rating: Math.round(d.rating), draftId: d.id, tag: d.id === s.draft.rivalId ? 'rival' : 'draft' });
+      const info = { name: d.name, age: d.age, rating: Math.round(d.rating), draftId: d.id, tag: d.id === s.draft.rivalId ? 'rival' : 'draft' };
+      if (!slot) {
+        // 枠がなければ2軍の選手として加える
+        const n = newMate(s, d.pos, info);
+        if (n.pos === 'P') n.role = 'farm';
+        players.push(n);
+        used.add(n.id);
+        continue;
+      }
+      Object.assign(slot, info);
       used.add(slot.id);
     }
     // 先輩はベテランの主力
@@ -81,12 +89,7 @@
   G.assignPitchRoles = (s) => {
     const R = s.roster;
     const pit = R.players.filter((m) => m.pos === 'P').sort((a, b) => b.rating - a.rating);
-    const draftFarm = (m) => {
-      if (m.draftId === undefined || !s.draft) return false;
-      const d = s.draft.picks.find((x) => x.id === m.draftId);
-      return d && d.status === '2軍';
-    };
-    const ok = pit.filter((m) => !draftFarm(m) && m.rating >= 38);
+    const ok = pit.filter((m) => m.rating >= 38);
     const sp = ok.filter((m) => m.prof.stamina >= 50).slice(0, 6);
     const rp = ok.filter((m) => !sp.includes(m)).slice(0, 7);
     for (const m of pit) m.role = 'farm';
@@ -128,10 +131,9 @@
         regulars.push(m);
       }
     }
-    // 控えは6人まで（残りは2軍）。ドラフト同期で2軍扱いの選手は2軍
-    const isFarmDraft = (m) => m.draftId !== undefined && s.draft && (s.draft.picks.find((x) => x.id === m.draftId) || {}).status === '2軍';
+    // 控えは6人まで（残りは2軍）
     R.players
-      .filter((m) => m.pos !== 'P' && m.role !== 'regular' && !m.injured && !isFarmDraft(m))
+      .filter((m) => m.pos !== 'P' && m.role !== 'regular' && !m.injured)
       .sort((a, b) => b.rating - a.rating)
       .slice(0, 6)
       .forEach((m) => (m.role = 'bench'));
@@ -229,7 +231,8 @@
       else m.rating += G.ri(-2, 2);
       m.rating = G.clamp(m.rating, 20, 92);
       if (m.pos !== 'P') for (const k in m.prof) m.prof[k] = G.clamp(Math.round(m.rating + G.gauss(0, 8)), 10, 99);
-      if (!m.gone && ((m.age >= 38 && G.chance(0.6)) || (m.age >= 30 && m.rating < 38) || m.age >= 41)) m.gone = '引退';
+      // ドラフト同期の引退はドラフト同期の側で決まる（食い違わないように）
+      if (!m.gone && m.draftId === undefined && ((m.age >= 38 && G.chance(0.6)) || (m.age >= 30 && m.rating < 38) || m.age >= 41)) m.gone = '引退';
       if (m.tag === 'senpai' && s.people && s.people.senpai.retired) m.gone = '引退（コーチに就任）';
     }
     const departed = R.players.filter((m) => m.gone);
