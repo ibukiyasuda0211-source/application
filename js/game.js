@@ -861,6 +861,8 @@
     G.resetStandings(s);
     G.genLeaders(s);
     s.final = null;
+    // カレンダーの試合結果は前年分まで残す
+    if (s.results) for (const k of Object.keys(s.results)) if (Number(k.slice(0, 4)) < s.year - 1) delete s.results[k];
     s.totalEarnings += p.salary;
     scene(s, `${s.year}年 新年`, `新しい年が明けた。${p.age}歳、プロ${p.yearsPro + 1}年目のシーズンが始まる！${msgs.length ? '\n\n' + msgs.join('\n') : ''}`);
     log(s, `${s.year}年 プロ${p.yearsPro + 1}年目（${p.age}歳）`, 'year');

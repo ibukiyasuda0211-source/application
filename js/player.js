@@ -74,6 +74,7 @@
       talent: G.rf(0.92, 1.12),
       ceiling: G.ri(68, 92),
       age: bg.age,
+      birthday: G.randomBirthday(),
       condition: 2,
       stamina: 100,
       injury: null,

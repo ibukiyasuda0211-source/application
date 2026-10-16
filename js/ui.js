@@ -215,6 +215,8 @@
     { id: 'team', name: 'チーム' },
     { id: 'sns', name: 'SNS' },
     { id: 'draft', name: 'ドラフト同期' },
+    { id: 'calendar', name: 'カレンダー' },
+    { id: 'ach', name: '実績' },
     { id: 'people', name: '人間関係' },
     { id: 'life', name: '人生' },
     { id: 'shop', name: 'ショップ' },
@@ -224,7 +226,7 @@
     `<div class="tabs">${TABS.filter((t) => !(s.after && ['upgrade', 'shop'].includes(t.id))).map(
       (t) =>
         `<button class="tab ${ui.tab === t.id ? 'on' : ''}" data-act="tab" data-arg="${t.id}">${t.name}${
-          t.id === 'upgrade' && canUpgradeSomething(s.player) ? '<span class="dot"></span>' : ''
+          (t.id === 'upgrade' && canUpgradeSomething(s.player)) || (t.id === 'ach' && s.achBadge) ? '<span class="dot"></span>' : ''
         }</button>`,
     ).join('')}</div>`;
 
@@ -683,6 +685,7 @@
   const snsTab = (s) => {
     const p = s.player;
     const r = G.egoSearch(s);
+    if (r.score >= 75 && s.achd) s.achd.flags.loved = true;
     const tone = (x) => (x.sent > 0 ? 'pos' : x.sent < 0 ? 'neg' : 'neu');
     return `<div class="panel">
       <div class="sns-head"><div><h3 style="margin:0">「${esc(p.name.split(' ')[0])}」の検索結果</h3>
@@ -865,6 +868,213 @@
     </div>`;
   };
 
+  // ================= カレンダー =================
+  const md = (str) => str.slice(5); // 'MM-DD'
+  // その年の、日付ごとの出来事
+  const yearEvents = (s, year) => {
+    const c = G.cal(year);
+    const p = s.player;
+    const mlb = G.isMLB(s);
+    const ev = {};
+    const add = (d, cls, text) => (ev[d] = ev[d] || []).push({ cls, text });
+    const wd = (w, i) => G.ymd(G.dateOfWeek(year, w, i));
+    add(`${year}-01-01`, 'season', '🎍 元日');
+    add(`${year}-02-01`, 'season', '⛺ 春季キャンプイン');
+    add(wd(c.openW, 5), 'season', '🌸 オープン戦');
+    add(c.opening, 'big', '⚾ 開幕戦');
+    const inter = c.days.filter((x) => x.inter);
+    if (inter.length && !mlb) {
+      add(inter[0].d, 'season', '🤝 交流戦開幕');
+      add(inter[inter.length - 1].d, 'season', '交流戦最終日');
+    }
+    c.allstarDates.forEach((d, i) => add(d, 'big', `⭐ オールスター第${i + 1}戦`));
+    add(c.lastGame, 'season', '🏁 レギュラーシーズン最終戦');
+    add(c.csDate, 'big', mlb ? '🏆 ポストシーズン' : '🏆 クライマックスシリーズ');
+    add(c.jsDate, 'big', mlb ? '🏆 ワールドシリーズ' : '🏆 日本シリーズ');
+    add(c.draftDate, 'season', '📋 ドラフト会議');
+    add(wd(c.releaseW, 0), 'season', '📮 戦力外通告期間');
+    if (!mlb) add(wd(c.faW, 0), 'season', '✍ FA宣言期間');
+    add(wd(c.awardsW, 1), 'season', '🏆 年間表彰式');
+    add(wd(c.contractW, 1), 'season', '💴 契約更改');
+    add(`${year}-12-31`, 'season', '🔔 大みそか');
+    // 私生活
+    if (p.birthday) add(`${year}-${p.birthday}`, 'life', `🎂 自分の誕生日`);
+    const pt = G.partner(s);
+    if (pt && pt.birthday) add(`${year}-${pt.birthday}`, 'life', `🎂 ${pt.name}の誕生日`);
+    const sp = G.spouse(s);
+    if (sp && sp.weddingDate) {
+      const n = year - Number(sp.weddingDate.slice(0, 4));
+      if (n === 0) add(sp.weddingDate, 'life', '💒 結婚式');
+      else if (n > 0) add(`${year}-${md(sp.weddingDate)}`, 'life', `💍 結婚${n}周年`);
+    }
+    for (const k of p.kids) {
+      const age = year - k.born;
+      if (k.birthday && age >= 0) add(`${year}-${k.birthday}`, 'life', age === 0 ? `👶 ${k.name}誕生` : `🎂 ${k.name}の${age}歳の誕生日`);
+    }
+    if (s.flags.weddingAt && pt && pt.stage === 'fiance') {
+      const w = s.flags.weddingAt - year * 52;
+      if (w >= 1 && w <= 52) add(wd(w, 5), 'life', `💒 ${pt.name}との結婚式（予定）`);
+    }
+    // 実績
+    for (const [key, v] of Object.entries(s.ach || {})) {
+      if (!v.d || Number(v.d.slice(0, 4)) !== year) continue;
+      const a = G.ACHIEVEMENTS.find((x) => x.key === key);
+      if (a) add(v.d, 'achv', `🏅 ${a.n}`);
+    }
+    return ev;
+  };
+
+  const calYearOf = (s) => (ui.calYear && ui.calYear <= s.year && ui.calYear >= s.year - 1 ? ui.calYear : s.year);
+
+  const gameInfo = (s, year, day) => {
+    const p = s.player;
+    const g = G.teamGameOn(year, day, p.teamId);
+    if (!g) return null;
+    const r = (s.results || {})[day.d];
+    return { ...g, day, r };
+  };
+
+  const calendarTab = (s) => {
+    const p = s.player;
+    const year = calYearOf(s);
+    const c = G.cal(year);
+    const now = G.dateOfWeek(s.year, s.week, 0);
+    const today = year === s.year ? G.ymd(now) : null;
+    const weekEnd = year === s.year ? G.ymd(G.dateOfWeek(s.year, s.week, 6)) : null;
+    let month = ui.calMonth || (year === s.year ? now.getUTCMonth() + 1 : 12);
+    if (year === s.year && now.getUTCFullYear() !== year) month = ui.calMonth || 1;
+    const ev = yearEvents(s, year);
+    const byDate = {};
+    for (const d of c.days) byDate[d.d] = d;
+    const pad = (n) => String(n).padStart(2, '0');
+    const first = new Date(Date.UTC(year, month - 1, 1));
+    const daysIn = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    const lead = first.getUTCDay();
+    let w = 0;
+    let l = 0;
+    let dr = 0;
+    const cells = [];
+    for (let i = 0; i < lead; i++) cells.push('<div class="cal-cell empty"></div>');
+    for (let dnum = 1; dnum <= daysIn; dnum++) {
+      const key = `${year}-${pad(month)}-${pad(dnum)}`;
+      const dow = (lead + dnum - 1) % 7;
+      const day = byDate[key];
+      const gi = day ? gameInfo(s, year, day) : null;
+      let game = '';
+      if (gi) {
+        const t = G.teamById(gi.opp);
+        let res = '';
+        if (gi.r && gi.r.rain) res = '<span class="cal-rain">☔中止</span>';
+        else if (gi.r) {
+          const o = gi.r.o;
+          if (o === 'W') w++;
+          else if (o === 'L') l++;
+          else dr++;
+          res = `<span class="cal-res ${o}">${o === 'W' ? '○' : o === 'L' ? '●' : '△'}${gi.r.sc[0]}-${gi.r.sc[1]}</span>`;
+        } else if (day.rain && key < (today || '9999')) res = '<span class="cal-rain">☔中止</span>';
+        game = `<div class="cal-game"><span class="team-chip mini" style="background:${t.color}">${gi.home ? '' : '@'}${esc(t.short)}</span>${res}</div>${
+          gi.inter ? '<span class="cal-tag inter">交流戦</span>' : ''
+        }${day.makeup ? '<span class="cal-tag">振替</span>' : ''}`;
+      }
+      const evs = ev[key] || [];
+      const marks = evs
+        .slice(0, 3)
+        .map((e) => `<div class="cal-ev ${e.cls}">${esc(e.text)}</div>`)
+        .join('');
+      const more = evs.length > 3 ? `<div class="cal-ev more">ほか${evs.length - 3}件</div>` : '';
+      const isWeek = today && key >= today && key <= weekEnd;
+      const past = today ? key < today : true;
+      cells.push(
+        `<button class="cal-cell ${dow === 0 ? 'sun' : dow === 6 ? 'sat' : ''} ${isWeek ? 'now' : ''} ${past ? 'past' : ''} ${ui.calDay === key ? 'sel' : ''}" data-act="calDay" data-arg="${key}">
+          <span class="cal-num">${dnum}</span>${game}${marks}${more}</button>`,
+      );
+    }
+    // 選んだ日の詳細
+    let detail = '';
+    const sel = ui.calDay && ui.calDay.startsWith(`${year}-${pad(month)}`) ? ui.calDay : null;
+    if (sel) {
+      const day = byDate[sel];
+      const gi = day ? gameInfo(s, year, day) : null;
+      const items = [];
+      if (gi) {
+        const t = G.teamById(gi.opp);
+        const me = G.teamById(p.teamId);
+        let line = `${gi.home ? `${esc(me.short)}（ホーム）` : `${esc(me.short)}（ビジター）`} vs ${esc(t.name)}${gi.inter ? '・交流戦' : ''}${day.makeup ? `・${G.fmtDate(day.makeupOf, false)}の振替試合` : ''}`;
+        if (gi.r && gi.r.rain) line += '<br>☔ 雨天中止（シーズン終盤に振替）';
+        else if (gi.r) {
+          const o = gi.r.o;
+          line += `<br><b class="${o === 'W' ? 'pos' : o === 'L' ? 'neg' : ''}">${o === 'W' ? '勝ち' : o === 'L' ? '負け' : '引き分け'} ${gi.r.sc[0]}-${gi.r.sc[1]}</b>`;
+          line += `<br>${gi.r.k ? `自分：${esc(gi.r.t)}` : gi.r.sq === 'first' ? '自分：出場なし（ベンチ）' : `自分：${esc(G.squadName(p, 'second'))}で調整中`}`;
+        } else if (!s.retired) line += '<br><span class="muted">これからの試合</span>';
+        items.push(`<li class="game">⚾ ${line}</li>`);
+      }
+      for (const e of ev[sel] || []) items.push(`<li class="${e.cls}">${esc(e.text)}</li>`);
+      const others = day && !day.rain ? G.dayPairs(year, day).filter((x) => x.home !== p.teamId && x.away !== p.teamId && (x.lg === 'inter' || x.lg === G.teamById(p.teamId).league)) : [];
+      detail = `<div class="cal-detail"><h4>${G.fmtDate(sel)}</h4>${items.length ? `<ul>${items.join('')}</ul>` : '<p class="muted">予定なし</p>'}${
+        others.length ? `<div class="muted cal-others">ほかのカード：${others.map((x) => `${esc(G.teamById(x.away).short)}－${esc(G.teamById(x.home).short)}`).join('・')}</div>` : ''
+      }</div>`;
+    }
+    const months = Array.from({ length: 12 }, (_, i) => i + 1)
+      .map((m) => `<button class="place ${m === month ? 'on' : ''}" data-act="calMonth" data-arg="${m}">${m}月</button>`)
+      .join('');
+    const years = [s.year - 1, s.year]
+      .filter((y) => y >= (s.startYear || s.year))
+      .map((y) => `<button class="place ${y === year ? 'on' : ''}" data-act="calYear" data-arg="${y}">${y}年</button>`)
+      .join('');
+    const key = [
+      ['big', '大きな日程'],
+      ['season', '球界の日程'],
+      ['life', '私生活'],
+      ['achv', '実績'],
+    ];
+    return `<div class="panel">
+      <div class="cal-head"><h3 style="margin:0">${year}年 ${month}月</h3><div class="places">${years}</div></div>
+      <div class="places cal-months">${months}</div>
+      <div class="cal-sum muted">${w + l + dr ? `この月の試合：${w}勝${l}敗${dr ? `${dr}分` : ''}` : ''}　開幕 ${G.fmtDate(c.opening)}・最終戦 ${G.fmtDate(c.lastGame)}（雨天中止 ${c.rainN}試合は終盤に振替）</div>
+      <div class="cal-grid">${G.DOW.map((d, i) => `<div class="cal-dow ${i === 0 ? 'sun' : i === 6 ? 'sat' : ''}">${d}</div>`).join('')}${cells.join('')}</div>
+      <div class="cal-legend">${key.map(([k, n]) => `<span class="cal-ev ${k}">${n}</span>`).join('')}<span class="team-chip mini" style="background:#888">@相手</span><span class="muted">＝ビジター</span></div>
+      ${detail || '<p class="muted" style="font-size:13px">日付を押すと、その日の詳しい情報が見られます。</p>'}
+    </div>`;
+  };
+
+  // ================= 実績 =================
+  const achTab = (s) => {
+    const list = G.achFor(s);
+    const prog = G.achProgress(s);
+    const cat = ui.achCat || 'debut';
+    const cats = G.ACH_CATS.filter((c) => list.some((a) => a.c === c.id));
+    const chips = [{ id: 'all', name: 'すべて' }, { id: 'recent', name: '最近' }, ...cats]
+      .map((c) => {
+        const n = c.id === 'all' || c.id === 'recent' ? '' : `<small>${list.filter((a) => a.c === c.id && s.ach[a.key]).length}/${list.filter((a) => a.c === c.id).length}</small>`;
+        return `<button class="place ${cat === c.id ? 'on' : ''}" data-act="achCat" data-arg="${c.id}">${c.name}${n}</button>`;
+      })
+      .join('');
+    let shown;
+    if (cat === 'recent') shown = list.filter((a) => s.ach[a.key]).sort((a, b) => (s.ach[b.key].d > s.ach[a.key].d ? 1 : -1)).slice(0, 30);
+    else shown = cat === 'all' ? list : list.filter((a) => a.c === cat);
+    const card = (a) => {
+      const got = s.ach[a.key];
+      const secret = a.hidden && !got;
+      return `<div class="ach ${got ? 'got' : ''} ${a.bitter ? 'bitter' : ''}">
+        <div class="ach-icon">${got ? (a.bitter ? '🥀' : '🏅') : secret ? '❔' : '🔒'}</div>
+        <div><div class="ach-name">${secret ? '？？？' : esc(a.n)}</div>
+        <div class="ach-desc muted">${secret ? 'ひみつの実績' : esc(a.d)}</div>
+        ${got ? `<div class="ach-date">${got.d.slice(0, 4)}年${G.fmtDate(got.d)} 達成</div>` : ''}</div></div>`;
+    };
+    const groups =
+      cat === 'all'
+        ? cats
+            .map((c) => `<h3 class="ach-cat">${c.name}</h3><div class="ach-grid">${list.filter((a) => a.c === c.id).map(card).join('')}</div>`)
+            .join('')
+        : `<div class="ach-grid">${shown.map(card).join('') || '<p class="muted">まだありません</p>'}</div>`;
+    return `<div class="panel">
+      <div class="ach-head"><div><h3 style="margin:0">自分だけの実績</h3><small class="muted">あなたしか見られない、人生の記録</small></div>
+        <div class="ach-prog"><b>${prog.got}</b><small> / ${prog.total}</small><div class="track"><div class="fill" style="width:${Math.round((prog.got / prog.total) * 100)}%"></div></div></div></div>
+      <div class="places">${chips}</div>
+      ${groups}
+    </div>`;
+  };
+
   const modalView = (s) => {
     const q = s.queue[0];
     if (!q) return '';
@@ -895,6 +1105,11 @@
     else if (ui.tab === 'life') body = lifeTab(s);
     else if (ui.tab === 'people') body = peopleTab(s);
     else if (ui.tab === 'draft') body = draftTab(s);
+    else if (ui.tab === 'calendar') body = calendarTab(s);
+    else if (ui.tab === 'ach') {
+      s.achBadge = 0;
+      body = achTab(s);
+    }
     else body = actionTab(s);
     return `<header class="topbar">
         <div class="date">${s.year}年 ${G.weekLabel(s.year, s.week)}${s.after ? '' : `<span class="phase">${phase.name}</span>`}</div>
@@ -995,6 +1210,13 @@
   };
 
   const afterTurn = () => {
+    const s = ui.s;
+    if (s.achNew && s.achNew.length) {
+      const names = s.achNew.map((k) => (G.ACHIEVEMENTS.find((a) => a.key === k) || {}).n).filter(Boolean);
+      s.achBadge = (s.achBadge || 0) + names.length;
+      if (names.length) toast(`🏅 実績解除：${names[names.length - 1]}${names.length > 1 ? `（ほか${names.length - 1}件）` : ''}`);
+      s.achNew = [];
+    }
     if (ui.s.ended && !ui.s.queue.length) ui.screen = 'ending';
     save();
     render();
@@ -1065,6 +1287,30 @@
     },
     tab: (arg) => {
       ui.tab = arg;
+      if (arg === 'calendar') {
+        ui.calMonth = null;
+        ui.calYear = null;
+        ui.calDay = null;
+      }
+      render();
+    },
+    calMonth: (arg) => {
+      ui.calMonth = Number(arg);
+      ui.calDay = null;
+      render();
+    },
+    calYear: (arg) => {
+      ui.calYear = Number(arg);
+      ui.calMonth = null;
+      ui.calDay = null;
+      render();
+    },
+    calDay: (arg) => {
+      ui.calDay = ui.calDay === arg ? null : arg;
+      render();
+    },
+    achCat: (arg) => {
+      ui.achCat = arg;
       render();
     },
     selTrain: (arg) => {

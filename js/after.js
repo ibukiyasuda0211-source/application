@@ -153,19 +153,16 @@
   };
 
   G.simLeagueWeek = (s) => {
-    const n = G.gamesInWeek(s.week, s.year);
     const boost = s.after && s.after.career === 'coach' ? s.after.level + 1 : 0;
-    for (let d = 0; d < n; d++) {
-      for (const lg of G.LEAGUES) {
-        const ids = G.shuffle(G.TEAMS.filter((t) => t.league === lg.id).map((t) => t.id));
-        for (let i = 0; i + 1 < ids.length; i += 2) {
-          const a = ids[i];
-          const b = ids[i + 1];
-          let o = G.playNpcGame(s, a, b);
-          if (boost && (a === s.player.teamId || b === s.player.teamId) && G.chance(boost * 0.02)) o = a === s.player.teamId ? 'W' : 'L';
-          G.recordResult(s, a, o);
-          G.recordResult(s, b, G.flip(o));
-        }
+    for (const day of G.daysInWeek(s.week, s.year)) {
+      if (day.rain) continue;
+      for (const x of G.dayPairs(s.year, day)) {
+        const a = x.home;
+        const b = x.away;
+        let o = G.playNpcGame(s, a, b);
+        if (boost && (a === s.player.teamId || b === s.player.teamId) && G.chance(boost * 0.02)) o = a === s.player.teamId ? 'W' : 'L';
+        G.recordResult(s, a, o);
+        G.recordResult(s, b, G.flip(o));
       }
     }
   };
@@ -200,6 +197,7 @@
     s.week = 1;
     p.age++;
     G.resetStandings(s);
+    if (s.results) for (const k of Object.keys(s.results)) if (Number(k.slice(0, 4)) < s.year - 1) delete s.results[k];
     for (const t of G.TEAMS) s.teamStr[t.id] = Math.round(G.clamp(s.teamStr[t.id] * 0.6 + G.rf(42, 58) * 0.4 + G.gauss(0, 2), 40, 60));
     if (a.career === 'coach') s.teamStr[p.teamId] = Math.min(65, s.teamStr[p.teamId] + Math.round((a.data.boost || 0) * 0.5) + a.level);
     if (a.career === 'coach') a.data.boost = (a.data.boost || 0) * 0.5;

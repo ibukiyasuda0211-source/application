@@ -127,7 +127,7 @@
       do name = `${G.pick(G.SURNAMES)} ${G.pick(G.FEMALE_NAMES)}`;
       while (used.has(name));
       used.add(name);
-      s.people[`h_${t.id}`] = { ...mk(`h_${t.id}`, name, t.job, 'love', 0, false), type: t.id, stage: 'none', dates: 0 };
+      s.people[`h_${t.id}`] = { ...mk(`h_${t.id}`, name, t.job, 'love', 0, false), type: t.id, stage: 'none', dates: 0, birthday: G.randomBirthday() };
     }
     p.happy = 60;
     p.home = p.age <= 22 ? 'dorm' : 'apartment';
@@ -777,6 +777,7 @@
         const marry = (s2, text, f) => {
           pt.stage = 'married';
           pt.marriedYear = s2.year;
+          pt.weddingDate = G.weekDate(s2, 5);
           if (s2.player.home === 'dorm') s2.player.home = 'apartment';
           s2.history.push({ year: s2.year, text: `${pt.name}と結婚` });
           G.buzz(s2, 'wedding');
@@ -795,7 +796,8 @@
           label: 'この名前にする',
           run: (s, q, input) => {
             const name = (input || '').trim().slice(0, 8) || q.input;
-            s.player.kids.push({ name, born: s.year, bond: 60, baseball: null });
+            const bd = G.weekDate(s, G.ri(0, 6));
+            s.player.kids.push({ name, born: s.year, bond: 60, baseball: null, birthday: bd.slice(5) });
             s.history.push({ year: s.year, text: `第${s.player.kids.length}子「${name}」誕生` });
             G.buzz(s, 'baby');
             return `「${name}」と名付けた。この子のためにも、もっと頑張らなきゃ！` + fx(s, { happy: 20, cond: 2, exp: { mind: 25 } });

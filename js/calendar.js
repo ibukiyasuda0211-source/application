@@ -88,11 +88,28 @@
     const rainSet = new Set();
     while (rainSet.size < rainN) rainSet.add(candidates[Math.floor(rnd() * candidates.length)].d);
     for (const x of days) if (rainSet.has(x.d)) x.rain = true;
+    // 3連戦（火〜木・金〜日）ごとに対戦カードを決める番号をふる
+    let ser = -1;
+    let iser = -1;
+    let prev = null;
+    for (const x of days) {
+      const dt = parse(x.d);
+      const dow = dt.getUTCDay();
+      const gap = prev ? Math.round((dt - prev.dt) / DAY) : 99;
+      if (!prev || dow === 2 || dow === 5 || gap > 1 || prev.inter !== x.inter) {
+        if (x.inter) iser++;
+        else ser++;
+      }
+      x.ser = x.inter ? iser : ser;
+      prev = { dt, inter: x.inter };
+    }
+    const rained = days.filter((x) => x.rain);
     let last = parse(days[days.length - 1].d);
     for (let i = 0; i < rainN; i++) {
       last = addDays(last, 1);
       if (last.getUTCDay() === 1) last = addDays(last, 1);
-      days.push({ d: ymd(last), inter: false, makeup: true });
+      // 振替試合は、中止になった日と同じカードで行う
+      days.push({ d: ymd(last), inter: false, makeup: true, ser: rained[i].ser, makeupOf: rained[i].d });
     }
     const byWeek = {};
     for (const x of days) {
@@ -126,11 +143,90 @@
       faW: jsW + 2,
       contractW: Math.max(jsW + 3, wk(12, 5)),
       fallEndW: wk(11, 30),
+      csDate: ymd(G.dateOfWeek(year, csW, 2)),
+      jsDate: ymd(G.dateOfWeek(year, jsW, 5)),
+      draftDate: ymd(firstDowOnOrAfter(utc(year, 10, 20), 4)), // 10月下旬の木曜
       rainN,
     };
     cache[year] = c;
     return c;
   };
 
+  G.ymd = ymd;
+  G.weekDate = (s, dayIdx = 0) => ymd(G.dateOfWeek(s.year, s.week, dayIdx));
+
+  // 誕生日（MM-DD）
+  G.randomBirthday = () => {
+    const m = 1 + Math.floor(Math.random() * 12);
+    const d = 1 + Math.floor(Math.random() * [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][m - 1]);
+    return `${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  };
+
   G.daysInWeek = (week, year) => G.cal(year).byWeek[week] || [];
+  G.dayOf = (year, dateStr) => G.cal(year).days.find((x) => x.d === dateStr) || null;
+
+  // ---------- 対戦カード ----------
+  // リーグ内は総当たり（サークル方式）を3連戦単位で回す。ホーム／ビジターは一巡ごとに入れ替え
+  const roundRobin = (ids, round) => {
+    const arr = ids.length % 2 ? [...ids, null] : ids.slice();
+    const n = arr.length;
+    const r = round % (n - 1);
+    const cycle = Math.floor(round / (n - 1));
+    const rest = arr.slice(1);
+    const rot = [arr[0], ...rest.slice(rest.length - r), ...rest.slice(0, rest.length - r)];
+    const out = [];
+    for (let i = 0; i < n / 2; i++) {
+      let a = rot[i];
+      let b = rot[n - 1 - i];
+      if (a === null || b === null) continue;
+      // 同じ組み合わせは一巡ごとにホームが入れ替わる
+      if ((ids.indexOf(a) + ids.indexOf(b) + cycle) % 2) [a, b] = [b, a];
+      out.push([a, b]); // [ホーム, ビジター]
+    }
+    return out;
+  };
+
+  const orderCache = {};
+  const teamOrder = (year, lgId) => {
+    const key = `${year}:${lgId}`;
+    if (!orderCache[key]) {
+      const rnd = seeded(year * 131 + lgId.length * 977 + lgId.charCodeAt(0));
+      const ids = G.TEAMS.filter((t) => t.league === lgId).map((t) => t.id);
+      for (let i = ids.length - 1; i > 0; i--) {
+        const j = Math.floor(rnd() * (i + 1));
+        [ids[i], ids[j]] = [ids[j], ids[i]];
+      }
+      orderCache[key] = ids;
+    }
+    return orderCache[key];
+  };
+
+  // その日の全カード：[{ lg, home, away }]
+  G.dayPairs = (year, day) => {
+    const out = [];
+    const npb = G.LEAGUES.filter((lg) => !lg.mlb);
+    if (day.inter && npb.length === 2) {
+      const A = teamOrder(year, npb[0].id);
+      const B = teamOrder(year, npb[1].id);
+      A.forEach((a, i) => {
+        const b = B[(i + day.ser) % B.length];
+        const aHome = (day.ser + year) % 2 === 0;
+        out.push({ lg: 'inter', home: aHome ? a : b, away: aHome ? b : a });
+      });
+    }
+    for (const lg of G.LEAGUES) {
+      if (day.inter && !lg.mlb) continue;
+      for (const [home, away] of roundRobin(teamOrder(year, lg.id), day.ser)) out.push({ lg: lg.id, home, away });
+    }
+    return out;
+  };
+
+  // あるチームのその日の相手：{ opp, home } または null
+  G.teamGameOn = (year, day, teamId) => {
+    for (const x of G.dayPairs(year, day)) {
+      if (x.home === teamId) return { opp: x.away, home: true, inter: x.lg === 'inter' };
+      if (x.away === teamId) return { opp: x.home, home: false, inter: x.lg === 'inter' };
+    }
+    return null;
+  };
 })();

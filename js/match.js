@@ -480,24 +480,13 @@
     }
     const pairs = {};
     let own = null;
-    const addPair = (lgId, a, b) => {
-      if (a === p.teamId || b === p.teamId) {
-        own = G.prepareOwnGame(s, a === p.teamId ? b : a);
-        own.home = G.chance(0.5);
+    // 日程表どおりのカード（3連戦・ホーム／ビジター）
+    for (const x of G.dayPairs(s.year, day)) {
+      if (x.home === p.teamId || x.away === p.teamId) {
+        own = G.prepareOwnGame(s, x.home === p.teamId ? x.away : x.home);
+        own.home = x.home === p.teamId;
         own.inter = !!day.inter;
-      } else (pairs[lgId] = pairs[lgId] || []).push([a, b]);
-    };
-    const npb = G.LEAGUES.filter((lg) => !lg.mlb);
-    if (day.inter && npb.length === 2) {
-      // 交流戦：セとパのように、別リーグのチームと対戦
-      const A = G.shuffle(G.TEAMS.filter((t) => t.league === npb[0].id).map((t) => t.id));
-      const B = G.shuffle(G.TEAMS.filter((t) => t.league === npb[1].id).map((t) => t.id));
-      A.forEach((a, i) => addPair('inter', a, B[i]));
-    }
-    for (const lg of G.LEAGUES) {
-      if (day.inter && !lg.mlb) continue;
-      const ids = G.shuffle(G.TEAMS.filter((t) => t.league === lg.id).map((t) => t.id));
-      for (let i = 0; i + 1 < ids.length; i += 2) addPair(lg.id, ids[i], ids[i + 1]);
+      } else (pairs[x.lg] = pairs[x.lg] || []).push([x.home, x.away]);
     }
     gw.cur = { pairs, own, day };
   };
@@ -508,6 +497,7 @@
     const { pairs, own, day } = gw.cur;
     if (gw.cur.rain) {
       gw.games.push({ rain: true, date: day.d });
+      (s.results = s.results || {})[day.d] = { rain: true };
       gw.d++;
       gw.cur = null;
       return null;
@@ -530,9 +520,20 @@
       G.recordResult(s, p.teamId, res.outcome);
       G.recordResult(s, own.oppId, G.flip(res.outcome));
       gw.games.push(res);
+      // カレンダー用に結果を残す
+      (s.results = s.results || {})[day.d] = {
+        o: res.outcome,
+        sc: res.score,
+        opp: own.oppId,
+        h: res.box ? res.box.home : own.home,
+        k: res.kind,
+        t: res.kind === 'bat' ? G.batLineText(res.line) : res.kind === 'pit' ? G.pitLineText(res.line) : '',
+        sq: p.squad,
+      };
       if (res.kind === 'bat') G.addStats(gw.acc.weekBat, res.line);
       if (res.kind === 'pit') G.addStats(gw.acc.weekPit, res.line);
       if (res.fld) G.addStats(gw.acc.weekFld, res.fld);
+      if (G.checkAch) G.checkAch(s, { game: res, date: day.d, own });
       if (res.kind === 'bat') {
         const l = res.line;
         if (l.hr >= 2 || l.h >= 3) G.buzz(s, 'hotgame', { text: l.hr >= 2 ? `${l.hr}本塁打の大暴れ` : `${l.h}安打の猛打賞` });
