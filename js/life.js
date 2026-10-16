@@ -429,7 +429,7 @@
 
   G.privateActions = (s) => {
     const p = s.player;
-    const list = [...STATIC_ACTIONS, ...loveActions(s)];
+    const list = [...STATIC_ACTIONS, ...loveActions(s), ...(G.extraActions ? G.extraActions(s) : [])];
     return list.map((a) => {
       let reason = a.req ? a.req(s) : '';
       if (!reason && a.cost && p.money < a.cost) reason = 'お金が足りない';
@@ -440,7 +440,7 @@
   };
 
   G.doPrivate = (s, id) => {
-    const list = [...STATIC_ACTIONS, ...loveActions(s)];
+    const list = [...STATIC_ACTIONS, ...loveActions(s), ...(G.extraActions ? G.extraActions(s) : [])];
     const a = list.find((x) => x.id === id);
     if (!a) return '';
     if (a.cost) s.player.money -= a.cost;

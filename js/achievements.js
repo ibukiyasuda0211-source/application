@@ -206,6 +206,15 @@
   [[5, 'プロ5年目'], [10, 'プロ10年目'], [15, 'プロ15年目'], [20, 'プロ20年目']].forEach(([n, name]) =>
     A('career', `y${n}`, name, `現役のままプロ${n}年目を迎えた`, (c) => !c.s.retired && c.p.yearsPro + 1 >= n),
   );
+  A('career', 'physDrop', '体は正直', '全盛期から体の衰えがはっきり見えてきた', (c) => !!c.s.story.styleDropOffered, { bitter: true });
+  A('career', 'tech35', '円熟の技', '35歳を過ぎてから、技術の経験点が1.3倍以上に', (c) => !c.s.retired && c.p.age >= 35 && G.ageExpMul(c.p, 'technique') >= 1.3);
+  A('career', 'muFirst', '対策を練る', 'データを見て、苦手な相手への対策をした', (c) => (c.p.muRaised || 0) >= 1);
+  A('career', 'muAll', '苦手なし', '対策（相性）がすべてプラスに', (c) => !!c.p.mu && Object.values(c.p.mu).every((v) => v >= 1));
+  A('career', 'parkFav', '得意の球場', 'ある球場で圧倒的な成績を残した（通算）', (c) => {
+    const sp = c.s.splits && c.s.splits.career;
+    if (!sp) return false;
+    return Object.keys(sp).some((k) => k.startsWith('park:') && (c.pit ? sp[k].outs >= 60 && (sp[k].er * 27) / sp[k].outs <= 1.5 : sp[k].ab >= 40 && G.batDerived(sp[k]).ops >= 1.0));
+  });
   A('career', 'vetcare', 'ベテランの調整術', 'ベテラン調整で体をケアした', (c) => (c.s.story.vetcare || 0) >= 1);
   A('career', 'vetcare30', '衰えに抗う', 'ベテラン調整を通算30週', (c) => (c.s.story.vetcare || 0) >= 30);
   A('career', 'style', 'モデルチェンジ', 'ベテランとしてプレースタイルを変えた', (c) => !!c.p.style);
@@ -271,6 +280,13 @@
   A('mlb', 'mk', 'メジャー初奪三振', 'メジャーの強打者から三振を奪った', (c) => c.isMLB && pitG(c) && c.gl.k > 0, PIT);
   A('mlb', 'ws', 'ワールドシリーズ制覇', '世界一のチームの一員になった', (c) => c.hasTitle('ワールドシリーズ制覇'), { hidden: true });
   A('mlb', 'mtitle', 'メジャーのタイトル', 'メジャーでタイトル・表彰を受けた', (c) => c.s.titles.some((t) => /^MLB|サイ・ヤング|シルバースラッガー|ゴールドグラブ/.test(t.name)), { hidden: true });
+  const ml = (c) => c.p.mlbLife;
+  A('mlb', 'adapt', 'アメリカに溶け込む', 'メジャーでの適応度が80に', (c) => !!ml(c) && ml(c).adapt >= 80);
+  A('mlb', 'hazing', '新人の洗礼', 'メジャー名物のルーキー・ヘイジングを経験した', (c) => c.seen('新人の洗礼'));
+  A('mlb', 'joke', '英語でジョーク', 'クラブハウスの人気者になった', (c) => c.seen('クラブハウスの人気者'), { hidden: true });
+  A('mlb', 'english', '英会話の成果', '英会話レッスンを20回受けた', (c) => c.priv('us_english') >= 20);
+  A('mlb', 'condition', '体調管理のプロ', 'メジャーでコンディショニングを15回', (c) => c.priv('us_condition') >= 15);
+  A('mlb', 'tired', '移動地獄', 'メジャーで疲労が80を超えた', (c) => !!ml(c) && ml(c).fatigue >= 80, { bitter: true });
   A('mlb', 'return', '日本球界に復帰', 'メジャーから日本に戻ってきた', (c) => c.hist(/日本球界に復帰/));
 
   // ===== 日本代表 =====
@@ -364,6 +380,16 @@
   A('people', 'teachS', '先輩の秘伝', '合同自主トレで先輩から特殊能力を伝授された', (c) => !!c.s.story.jt_senpai_taught);
   A('people', 'teachR', 'ライバルの得意技', 'ライバルから得意技を教わった', (c) => !!c.s.story.jt_rival_taught);
   A('people', 'kohaiGrow', '後輩を育てる', '一緒に自主トレした後輩が頭角を現した', (c) => !!c.s.story.jt_kohai_grow);
+  const chainDone = (c, id) => !!(c.s.chain && c.s.chain[id]);
+  A('people', 'invite', '自主トレのお誘い', '仲間から合同自主トレに誘われた', (c) => ['senpai_invite', 'rival_invite', 'kohai_invite'].some((id) => chainDone(c, id)));
+  A('people', 'senpaiMgr', '先輩が監督に', 'お世話になった先輩が監督に就任した', (c) => chainDone(c, 'senpai_manager'));
+  A('people', 'senpaiCall', '監督からのラブコール', '先輩監督に呼ばれ、ヘッドコーチに就任した', (c) => chainDone(c, 'senpai_call'), { hidden: true });
+  A('people', 'friendPartner', '親友の店', '親友の店に共同出資した', (c) => chainDone(c, 'friend_partner'));
+  A('people', 'friendBiz', '親友と共同経営', '引退後、親友と一緒に店を経営した', (c) => chainDone(c, 'friend_business'), { hidden: true });
+  A('people', 'column', '連載コラム', 'スポーツ紙でコラムの連載を始めた', (c) => chainDone(c, 'reporter_column'));
+  A('people', 'rivalAcademy', 'ふたりの夢', 'ライバルと野球アカデミーを作った', (c) => chainDone(c, 'rival_academy'), { hidden: true });
+  A('people', 'kohaiStar', '後輩の晴れ舞台', '育てた後輩がタイトルを獲った', (c) => chainDone(c, 'kohai_star'));
+  A('people', 'chains10', 'つながりの人生', '人間関係の「つながり」を10個達成した', (c) => Object.keys(c.s.chain || {}).length >= 10, { hidden: true });
   A('people', 'senpaiDinner', '先輩にごちそうさま', '先輩と10回食事に行った', (c) => c.priv('senpai') >= 10);
   A('people', 'kohaiTreat', '後輩思い', '後輩に10回おごった', (c) => c.priv('kohai') >= 10);
   A('people', 'rivalRetire', 'ライバルの引退', '同期のライバルがユニフォームを脱いだ', (c) => c.seen('ライバルの引退') || c.hist(/ライバル.*引退/));

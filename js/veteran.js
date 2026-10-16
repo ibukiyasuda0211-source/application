@@ -99,10 +99,30 @@
     return `${s.people.coach.name}に、これからのプレースタイルを相談した。`;
   };
 
-  // 33歳になると、コーチの方から一度だけ持ちかけてくる
+  // 体の能力のピークからの落ち幅
+  const physNow = (p) => (G.isPitcher(p) ? p.pitcher.velocity : p.batter.power + p.batter.speed);
+  G.physDrop = (p) => Math.max(0, (p.peakPhys || physNow(p)) - physNow(p));
+
+  // 体の衰えがはっきりしてきたら（または33歳になったら）、コーチの方から持ちかけてくる
   G.styleOfferCheck = (s) => {
     const p = s.player;
-    if (s.retired || s.after || p.style || p.age < 33 || s.story.styleOffered) return;
+    const drop = G.physDrop(p);
+    p.peakPhys = Math.max(p.peakPhys || 0, physNow(p));
+    if (s.retired || s.after || p.style) return;
+    const big = G.isPitcher(p) ? drop >= 5 : drop >= 10;
+    if (big && p.age >= 29 && !s.story.styleDropOffered) {
+      s.story.styleDropOffered = true;
+      s.story.styleOffered = true;
+      styleScene(
+        s,
+        '体の変化',
+        `${s.people.coach.name}「${G.isPitcher(p) ? `全盛期より球速が${drop}km/hも落ちている` : '走力とパワーが全盛期より明らかに落ちてきた'}。体は正直だ。…だが、技術と経験はこれからもっと伸びる。ここでスタイルを変えてみないか」
+
+どんな選手を目指す？（一度決めると戻せない）`,
+      );
+      return;
+    }
+    if (p.age < 33 || s.story.styleOffered) return;
     s.story.styleOffered = true;
     styleScene(
       s,

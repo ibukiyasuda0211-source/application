@@ -277,8 +277,21 @@
   };
 
   // 年を取ったときの衰え
+  // 年齢による衰えの重み（体の能力ほど落ちやすい）
+  G.AGING_WEIGHT = { power: 1.25, speed: 1.4, arm: 1.2, fielding: 1.0, contact: 0.6, catching: 0.6, velocity: 1.3, stamina: 1.3, control: 0.55 };
+  G.AGING_START = { early: 29, normal: 32, late: 34 };
+
+  // 年齢による経験点の倍率：若いうちは体が伸び、ベテランになると技術と精神が伸びる
+  G.ageExpMul = (p, k, age = p.age) => {
+    const t = age - (G.AGING_START[p.growth] - 3);
+    const phys = k === 'muscle' || k === 'agility';
+    if (age <= 22 && phys) return 1.1;
+    if (t <= 0) return 1;
+    return phys ? Math.max(0.55, 1 - t * 0.045) : Math.min(1.6, 1 + t * 0.06);
+  };
+
   G.applyAging = (p) => {
-    const start = { early: 29, normal: 32, late: 34 }[p.growth];
+    const start = G.AGING_START[p.growth];
     const over = p.age - start;
     const msgs = [];
     if (over <= 0) return msgs;
@@ -288,20 +301,23 @@
     const keep = G.agingKeep ? G.agingKeep(p) : [];
     const half = (k, d) => (keep.includes(k) ? Math.floor(d / 2) : d);
     const amt = Math.max(1, Math.ceil(over * 1.6 * (1 - relief)));
+    // 体（筋力・スピード系）は大きく、技術系はゆるやかに落ちる
+    const W = G.AGING_WEIGHT;
+    const dec = (k, d) => half(k, Math.round(d * (W[k] || 1)));
     if (G.isPitcher(p)) {
       const pt = p.pitcher;
-      const dv = half('velocity', G.ri(0, Math.ceil(amt * 0.7)));
+      const dv = dec('velocity', G.ri(0, Math.ceil(amt * 0.7)));
       pt.velocity = Math.max(120, pt.velocity - dv);
-      pt.control = Math.max(1, pt.control - half('control', G.ri(0, amt)));
-      pt.stamina = Math.max(1, pt.stamina - half('stamina', G.ri(1, amt + 1)));
+      pt.control = Math.max(1, pt.control - dec('control', G.ri(0, amt)));
+      pt.stamina = Math.max(1, pt.stamina - dec('stamina', G.ri(1, amt + 1)));
       for (const x of pt.pitches) {
-        if (x.level > 1 && G.chance(Math.min(0.8, over * 0.08))) x.level--;
+        if (x.level > 1 && G.chance(Math.min(0.5, over * 0.05))) x.level--;
       }
       if (dv > 0) msgs.push(`球速が${dv}km/h落ちた…`);
     } else {
       const b = p.batter;
       for (const k of Object.keys(b)) {
-        const d = half(k, G.ri(0, amt + (k === 'speed' ? 1 : 0)));
+        const d = dec(k, G.ri(0, amt + (k === 'speed' ? 1 : 0)));
         b[k] = Math.max(1, b[k] - d);
       }
     }

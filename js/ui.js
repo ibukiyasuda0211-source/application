@@ -215,6 +215,7 @@
     { id: 'team', name: 'チーム' },
     { id: 'sns', name: 'SNS' },
     { id: 'draft', name: 'ドラフト同期' },
+    { id: 'data', name: 'データ' },
     { id: 'calendar', name: 'カレンダー' },
     { id: 'ach', name: '実績' },
     { id: 'people', name: '人間関係' },
@@ -339,6 +340,11 @@
       .join('')}</div></details>`;
   };
 
+  const hintHtml = (s, own) =>
+    `<ul class="mhint">${G.matchupHint(s, own)
+      .map((h) => `<li><span>${esc(h.label)}</span>${h.grade ? `<b class="mu-grade">${h.grade}</b>` : ''}<small class="muted">${esc(h.data)}</small></li>`)
+      .join('')}</ul>`;
+
   const pregameView = (s) => {
     const p = s.player;
     const own = s.gw.cur.own;
@@ -348,10 +354,10 @@
       const us = G.usageSummary(s);
       scout = `<div class="scout"><b>${own.starter ? `今日は「${own.order}」でスタメン出場` : own.defOnly ? 'ベンチスタート（終盤の守備固めで出番がありそう）' : 'ベンチスタート（代打で出番がありそう）'}</b>
         ${us ? `<div class="muted">${esc(us.detail)}${us.mood ? `・${esc(us.mood)}` : ''}</div>` : ''}
-        <div>相手先発：${esc(own.oppP.name)}（<b>${o.name}</b>）</div><div class="muted">スコアラー「${o.hint}」</div></div>`;
+        <div>相手先発：${esc(own.oppP.name)}（<b>${G.HAND_NAME[own.oppP.hand || 'R']}・${o.name}</b>）</div><div class="muted">スコアラー「${o.hint}」</div>${hintHtml(s, own)}</div>`;
     } else {
       const l = G.OPP_LINEUPS.find((x) => x.id === own.lineup);
-      scout = `<div class="scout"><b>${esc(own.situation)}</b><div>相手打線：<b>${l.name}</b></div><div class="muted">捕手「${l.hint}」</div></div>`;
+      scout = `<div class="scout"><b>${esc(own.situation)}</b><div>相手打線：<b>${l.name}・${G.LINEUP_HAND[own.lineupHand || 'mix']}</b></div><div class="muted">捕手「${l.hint}」</div>${hintHtml(s, own)}</div>`;
     }
     const aps = G.approachList(p);
     const def = G.defaultApproach(s);
@@ -514,6 +520,15 @@
     </div>`;
   };
 
+  // メジャーでの疲労と適応
+  const mlbBox = (s) => {
+    const m = G.mlbStatus(s);
+    if (!m) return '';
+    const meter = (label, v, bad) => `<div class="mlb-meter"><span>${label}</span><div class="track"><div class="fill ${bad ? 'bad' : ''}" style="width:${v}%"></div></div><b>${v}</b></div>`;
+    return `<div class="mlb-box"><div class="mlb-meters">${meter('疲労', m.fatigue, m.fatigue >= 50)}${meter('適応度', m.adapt, m.adapt < 50)}</div>
+      <div class="muted" style="font-size:12px">✈ ${esc(m.travel)}　${m.off < -0.5 ? `<b class="neg">疲れ・不慣れで本来の力を出し切れていない（影響：${-m.off < 1.5 ? '小' : -m.off < 3.5 ? '中' : '大'}）</b>` : '実力を出せる状態'}</div></div>`;
+  };
+
   const actionTab = (s) => {
     if (s.after) return afterActionTab(s);
     if (s.gw && s.gw.last) return resultView(s);
@@ -535,7 +550,7 @@
       <span>体力 <b style="color:${staminaColor(p.stamina)}">${Math.round(p.stamina)}</b></span>
       <span>充実度 <b>${Math.round(p.happy)}</b></span>
       <span>所持金 <b>${G.fmtMoney(p.money)}</b></span><span class="tag ${p.squad}">${G.squadName(p)}</span>
-      ${p.injury ? `<span class="tag injury">故障 残り${p.injury.weeks}週</span>` : ''}</div>`;
+      ${p.injury ? `<span class="tag injury">故障 残り${p.injury.weeks}週</span>` : ''}</div>${mlbBox(s)}`;
 
     const trainBtn = (a) =>
       `<button class="act train ${a.risky ? 'risky' : ''} ${a.rest ? 'restopt' : ''} ${ui.sel.train === a.id ? 'on' : ''}" data-act="selTrain" data-arg="${a.id}" aria-pressed="${ui.sel.train === a.id}"><b>${esc(a.name)}</b><small>${esc(a.desc)}</small></button>`;
@@ -644,9 +659,149 @@
       <h3>基礎能力</h3><table class="up-table">${rows}</table>
       ${pitchHtml}
       <h3 class="mt">特殊能力</h3><div class="skill-list">${skills}</div>
+      ${muSection(s)}
+      ${agingPanel(s)}
       <p class="muted" style="font-size:12px">※ 能力が高くなるほど必要な経験点は増えます。選手ごとの「素質」を超えると、さらに伸びにくくなります。</p>
     </div>`;
   };
+
+  // 年齢と経験点の倍率（エイジングカーブ）。同じ単位（倍率）の2系列を1つの軸で
+  const agingPanel = (s) => {
+    const p = s.player;
+    const A0 = 18;
+    const A1 = 42;
+    const L = 36;
+    const R = 300;
+    const T = 12;
+    const B = 128;
+    const Y0 = 0.5;
+    const Y1 = 1.7;
+    const x = (a) => L + ((a - A0) / (A1 - A0)) * (R - L);
+    const y = (v) => B - ((v - Y0) / (Y1 - Y0)) * (B - T);
+    const ages = [];
+    for (let a = A0; a <= A1; a++) ages.push(a);
+    const phys = ages.map((a) => G.ageExpMul(p, 'muscle', a));
+    const tech = ages.map((a) => G.ageExpMul(p, 'technique', a));
+    const path = (vals) => vals.map((v, i) => `${i ? 'L' : 'M'}${x(ages[i]).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+    const start = G.AGING_START[p.growth];
+    const now = G.clamp(p.age, A0, A1);
+    const grid = [0.5, 1.0, 1.5].map((v) => `<line x1="${L}" x2="${R}" y1="${y(v)}" y2="${y(v)}" class="ag-grid"/><text x="${L - 6}" y="${y(v) + 4}" class="ag-axis" text-anchor="end">×${v.toFixed(1)}</text>`).join('');
+    const xt = [20, 25, 30, 35, 40].map((a) => `<text x="${x(a)}" y="${B + 16}" class="ag-axis" text-anchor="middle">${a}歳</text>`).join('');
+    const hits = ages
+      .map((a, i) => `<rect x="${x(a) - 5}" y="${T}" width="10" height="${B - T}" class="ag-hit"><title>${a}歳：体（筋力・敏捷）×${phys[i].toFixed(2)}・技術・精神 ×${tech[i].toFixed(2)}</title></rect>`)
+      .join('');
+    const mPhys = G.ageExpMul(p, 'muscle');
+    const mTech = G.ageExpMul(p, 'technique');
+    const drop = G.physDrop ? G.physDrop(p) : 0;
+    return `<h3 class="mt">年齢とからだ（エイジングカーブ）</h3>
+      <div class="ag-legend"><span><i class="sw tech"></i>技術・精神・変化球の経験点</span><span><i class="sw phys"></i>体（筋力・敏捷）の経験点</span></div>
+      <svg class="ag-chart" viewBox="0 0 340 152" role="img" aria-label="年齢ごとの経験点の倍率">
+        <rect x="${x(start)}" y="${T}" width="${R - x(start)}" height="${B - T}" class="ag-zone"/>
+        <text x="${x(start) + 4}" y="${T + 11}" class="ag-axis">衰え始め（${start}歳〜）</text>
+        ${grid}${xt}
+        <path d="${path(tech)}" class="ag-line tech"/><path d="${path(phys)}" class="ag-line phys"/>
+        <line x1="${x(now)}" x2="${x(now)}" y1="${T}" y2="${B}" class="ag-now"/>
+        <circle cx="${x(now)}" cy="${y(mTech)}" r="4" class="ag-dot tech"/><circle cx="${x(now)}" cy="${y(mPhys)}" r="4" class="ag-dot phys"/>
+        <text x="${Math.min(x(now) + 5, R - 30)}" y="${B - 4}" class="ag-axis ag-nowlabel">いま${p.age}歳</text>
+        <text x="${R + 4}" y="${y(tech[tech.length - 1]) + 4}" class="ag-end">技術</text><text x="${R + 4}" y="${y(phys[phys.length - 1]) + 4}" class="ag-end">体</text>
+        ${hits}
+      </svg>
+      <p class="muted" style="font-size:12px;margin-top:2px">いまの練習効率：体（筋力・敏捷）×${mPhys.toFixed(2)}／技術・精神 ×${mTech.toFixed(2)}。毎年オフの衰えは、走力・パワー・球速・スタミナなど体の能力ほど大きく、ミート・コントロール・捕球など技術の能力は小さい。${
+        drop ? `全盛期から${G.isPitcher(p) ? `球速が${drop}km/h` : `パワー＋走力が${drop}`}落ちている。` : ''
+      }ベテランになったら「技術で勝負する」モデルチェンジも考えよう。</p>`;
+  };
+
+  // 対策（相性）：-6〜+6 を中央からのバーで表す（右＝得意、左＝苦手）
+  const muBar = (v) => {
+    const w = (Math.abs(v) / G.MU_MAX) * 50;
+    return `<div class="mu-track"><div class="mu-mid"></div><div class="mu-fill ${v >= 0 ? 'pos' : 'neg'}" style="${v >= 0 ? `left:50%` : `right:50%`};width:${w}%"></div></div>`;
+  };
+  const muSection = (s) => {
+    const p = s.player;
+    const mu = G.ensureMU(p);
+    const defs = G.MU_DEFS[G.isPitcher(p) ? 'pit' : 'bat'];
+    const rows = defs
+      .map((d) => {
+        const v = mu[d.id];
+        const cost = G.muCost(v);
+        const ok = v < G.MU_MAX && G.canAfford(p, cost);
+        return `<div class="mu-row"><div class="mu-name"><b>${d.name}</b> <span class="mu-grade">${G.muGrade(v)}</span><small class="muted">${d.desc}</small></div>
+          ${muBar(v)}<div class="mu-val">${v > 0 ? '+' : ''}${v}</div>
+          <div class="mu-up">${v >= G.MU_MAX ? '<span class="muted">最大</span>' : `<small class="cost">${costHtml(p, cost)}</small><button class="btn small" data-act="raiseMU" data-arg="${d.id}" ${ok ? '' : 'disabled'}>対策</button>`}</div></div>`;
+      })
+      .join('');
+    return `<h3 class="mt">対策（相性）</h3>
+      <p class="muted" style="font-size:12px;margin-top:-4px">右に伸びるほど得意、左は苦手。苦手な相手と当たる試合は打ちにくく（抑えにくく）なる。「データ」タブで、どの相手に弱いか確かめよう。</p>
+      <div class="mu-list">${rows}</div>`;
+  };
+
+  // ================= データ（条件別の成績） =================
+  // 1系列の横棒グラフ。値はバーの外に置き、基準線（リーグ平均）を引く
+  const barChart = (rows, opt) => {
+    if (!rows.length) return '<p class="muted" style="font-size:13px">まだデータがありません。</p>';
+    const max = Math.max(opt.ref * 1.6, ...rows.map((r) => r.v));
+    const refPct = (opt.ref / max) * 100;
+    return `<div class="hbar-chart">${rows
+      .map(
+        (r) => `<div class="hbar-row" title="${esc(r.tip)}"><div class="hbar-label">${r.label}</div>
+        <div class="hbar-track"><div class="hbar-fill ${r.few ? 'few' : ''}" style="width:${Math.max(1, (r.v / max) * 100)}%"></div><div class="hbar-ref" style="left:${refPct}%"></div></div>
+        <div class="hbar-val">${esc(r.text)}${r.few ? '<small class="muted">（少）</small>' : ''}</div></div>`,
+      )
+      .join('')}<div class="hbar-foot muted"><span class="ref-key"></span>${esc(opt.refLabel)}${opt.note ? `　${esc(opt.note)}` : ''}</div></div>`;
+  };
+
+  const dataTab = (s) => {
+    const p = s.player;
+    const pit = G.isPitcher(p);
+    const scope = ui.dataScope || (Object.keys(G.splitsFor(s, 'season')).length ? 'season' : 'career');
+    const sp = G.splitsFor(s, scope);
+    const row = (key, label) => {
+      const l = sp[key];
+      if (!l) return null;
+      const v = G.splitValue(l, pit);
+      if (v === null) return null;
+      if (pit) {
+        const few = l.outs < 27;
+        return { label, v, few, text: `防御率${v.toFixed(2)}`, tip: `${label}：防御率${v.toFixed(2)}・${G.fmtIP(l.outs)}回・被安打${l.h}・奪三振${l.k}` };
+      }
+      const few = l.ab < 20;
+      return { label, v, few, text: `OPS ${v.toFixed(3).replace(/^0/, '')}`, tip: `${label}：打率${G.fmtRate(l.h, l.ab)}・${l.hr}本塁打・${l.ab}打数・OPS ${v.toFixed(3)}` };
+    };
+    const opt = pit ? { ref: 3.5, refLabel: '縦線＝リーグ平均（防御率3.50）', note: 'バーが短いほど良い' } : { ref: 0.7, refLabel: '縦線＝リーグ平均（OPS .700）', note: 'バーが長いほど良い' };
+    const keep = (list) => list.filter(Boolean);
+    let sections;
+    if (pit) {
+      sections = [
+        ['相手打線の左右', keep(['L', 'R', 'mix'].map((h) => row(`lhand:${h}`, G.LINEUP_HAND[h])))],
+        ['相手打線のタイプ', keep(G.OPP_LINEUPS.map((l) => row(`lineup:${l.id}`, l.name)))],
+      ];
+    } else {
+      sections = [
+        ['相手先発の利き腕', keep(['L', 'R'].map((h) => row(`hand:${h}`, h === 'L' ? '対左投手' : '対右投手')))],
+        ['相手先発のタイプ', keep(G.OPP_PITCHERS.map((o) => row(`ptype:${o.id}`, o.name)))],
+      ];
+    }
+    const parks = keep(Object.keys(sp).filter((k) => k.startsWith('park:')).map((k) => {
+      const tid = k.slice(5);
+      const pk = G.parkOf(tid);
+      return row(k, `${pk.name}<small class="muted">${pk.dome ? 'ドーム・' : ''}${G.parkLabel(pk)}</small>`);
+    })).sort((a, b) => (pit ? a.v - b.v : b.v - a.v));
+    const opps = keep(Object.keys(sp).filter((k) => k.startsWith('opp:')).map((k) => row(k, `vs ${G.teamById(k.slice(4)).short}`))).sort((a, b) => (pit ? a.v - b.v : b.v - a.v));
+    sections.push(['球場別', parks], ['対戦球団別', opps]);
+    const mu = G.ensureMU(p);
+    const defs = G.MU_DEFS[pit ? 'pit' : 'bat'];
+    const muLine = defs.map((d) => `<span class="mu-chip">${d.name} <b>${G.muGrade(mu[d.id])}</b></span>`).join('');
+    return `<div class="panel">
+      <div class="cal-head"><h3 style="margin:0">データ分析</h3><div class="places">${['season', 'career']
+        .map((x) => `<button class="place ${scope === x ? 'on' : ''}" data-act="dataScope" data-arg="${x}">${x === 'season' ? `${s.year}年` : '通算'}</button>`)
+        .join('')}</div></div>
+      <p class="muted" style="font-size:13px">条件ごとの1軍成績。苦手な相手が見つかったら「能力アップ」タブの「対策」で克服しよう。球場との相性は、数字を見ないとわからない。</p>
+      <div class="mu-chips">${muLine}</div>
+      ${sections.map(([title, rows]) => `<h4 class="data-h">${title}</h4>${barChart(rows, opt)}`).join('')}
+      <p class="muted" style="font-size:12px">（少）：まだ打席数・投球回が少なく、参考程度の数字。</p>
+    </div>`;
+  };
+
 
   const batRow = (label, st, cls = '') => {
     const d = G.batDerived(st);
@@ -939,8 +1094,24 @@
 
   const peopleTab = (s) => {
     const P = s.people;
+    const chainHtml = (id) => {
+      const steps = G.chainState(s, id);
+      if (!steps.length) return '';
+      let shown = false;
+      return `<ol class="chain">${steps
+        .map((st) => {
+          if (st.ok) return `<li class="ok">✔ ${esc(st.name)}${st.year ? `<small class="muted">（${st.year}年）</small>` : ''}</li>`;
+          if (!shown) {
+            shown = true;
+            return `<li class="next">▶ ${esc(st.name)}<small class="muted">${esc(st.hint)}</small></li>`;
+          }
+          return '<li class="lock">・？？？</li>';
+        })
+        .join('')}</ol>`;
+    };
     const card = (x, extra = '') => {
       const stage = x.group === 'love' ? G.STAGE_NAME[x.stage] : '';
+      if (x.group !== 'love') extra += chainHtml(x.id);
       return `<div class="person ${x.group === 'love' ? 'love' : ''}">
         <div class="row"><b>${esc(x.name)}</b>${stage ? `<span class="tag ${x.stage}">${stage}</span>` : ''}</div>
         <small class="muted">${esc(x.role)}${x.retired && x.id === 'rival' ? '（引退）' : ''}</small>
@@ -959,7 +1130,7 @@
       <h3 class="mt">恋愛</h3>
       ${love.length ? `<div class="people">${love.map((h) => card(h, s.story[`liked_${h.id}`] || h.dates >= 3 ? `<small class="muted">好み：${esc({ quiet: '落ち着いたデート', active: 'アクティブなデート', luxury: 'おしゃれなディナー', casual: '気軽なデート' }[G.heroineType(h).likes])}</small>` : '')).join('')}</div>` : '<p class="muted">まだ特別な出会いはない。</p>'}
       ${unmet && !pt ? `<p class="hint">まだ出会っていない人が${unmet}人いる。カフェ、ジム、取材やテレビ出演、地元への帰省で出会えるかも。</p>` : ''}
-      <p class="muted" style="font-size:12px">親密度が上がると、特別なイベントが起こることがある。恋人とは会わない日が続くと好感度が下がっていく。</p>
+      <p class="muted" style="font-size:12px">親密度が上がると、特別なイベントが起こることがある。「つながり」は過去の選択とともに積み重なり、自主トレの誘いや引退後の仕事にまでつながっていく。恋人とは会わない日が続くと好感度が下がっていく。</p>
     </div>`;
   };
 
@@ -1263,13 +1434,14 @@
     else if (ui.tab === 'people') body = peopleTab(s);
     else if (ui.tab === 'draft') body = draftTab(s);
     else if (ui.tab === 'calendar') body = calendarTab(s);
+    else if (ui.tab === 'data') body = dataTab(s);
     else if (ui.tab === 'ach') {
       s.achBadge = 0;
       body = achTab(s);
     }
     else body = actionTab(s);
     return `<header class="topbar">
-        <div class="date">${s.year}年 ${G.weekLabel(s.year, s.week)}${s.after ? '' : `<span class="phase">${phase.name}</span>`}</div>
+        <div class="date">${s.year}年 ${G.weekLabel(s.year, s.week)}${s.after ? '' : `<span class="phase">${G.isMLB(s) && phase.id === 'season' ? 'レギュラーシーズン' : phase.name}</span>`}</div>
         <div class="team"><span class="team-chip" style="background:${team.color}">${team.short}</span>${team.name}</div>
         <div class="spacer"></div>
         <button class="btn sub" data-act="quit">タイトルへ</button>
@@ -1476,6 +1648,15 @@
     },
     logMore: () => {
       ui.logMore = (ui.logMore || 1) + 1;
+      render();
+    },
+    dataScope: (arg) => {
+      ui.dataScope = arg;
+      render();
+    },
+    raiseMU: (arg) => {
+      if (!G.raiseMU(ui.s.player, arg)) toast('経験点が足りません');
+      save();
       render();
     },
     achCat: (arg) => {

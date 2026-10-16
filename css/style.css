@@ -2024,3 +2024,293 @@ h3 {
 .honor b {
   display: block;
 }
+
+/* ---------- 相性・データ ---------- */
+.mu-list {
+  display: grid;
+  gap: 8px;
+}
+.mu-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(80px, 1fr) 36px auto;
+  gap: 8px;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 6px;
+}
+.mu-name small {
+  display: block;
+  font-size: 11px;
+}
+.mu-grade {
+  font-weight: 800;
+  color: var(--accent-dark);
+}
+.mu-track {
+  position: relative;
+  height: 10px;
+  background: #edf0ec;
+  border-radius: 999px;
+}
+.mu-mid {
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  bottom: -3px;
+  width: 1px;
+  background: #9aa49a;
+}
+.mu-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+.mu-fill.pos {
+  background: #2a78d6;
+  border-radius: 0 4px 4px 0;
+}
+.mu-fill.neg {
+  background: #eb6834;
+  border-radius: 4px 0 0 4px;
+}
+.mu-val {
+  font-weight: 800;
+  text-align: right;
+  font-size: 13px;
+}
+.mu-up {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+@media (max-width: 560px) {
+  .mu-row {
+    grid-template-columns: minmax(0, 1fr) 80px 32px;
+  }
+  .mu-up {
+    grid-column: 1 / -1;
+  }
+}
+.mu-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.mu-chip {
+  font-size: 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+.mhint {
+  list-style: none;
+  padding: 0;
+  margin: 6px 0 0;
+  display: grid;
+  gap: 2px;
+  font-size: 13px;
+}
+.mhint li {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.data-h {
+  margin: 14px 0 6px;
+}
+.hbar-chart {
+  display: grid;
+  gap: 4px;
+}
+.hbar-row {
+  display: grid;
+  grid-template-columns: minmax(96px, 1.1fr) minmax(0, 2fr) 116px;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+}
+.hbar-label small {
+  display: block;
+  font-size: 10px;
+}
+.hbar-track {
+  position: relative;
+  height: 16px;
+}
+.hbar-fill {
+  height: 100%;
+  background: #2a78d6;
+  border-radius: 0 4px 4px 0;
+}
+.hbar-fill.few {
+  opacity: 0.35;
+}
+.hbar-ref {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 1px;
+  background: #52514e;
+}
+.hbar-val {
+  font-weight: 700;
+  white-space: nowrap;
+}
+.hbar-foot {
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.ref-key {
+  display: inline-block;
+  width: 1px;
+  height: 12px;
+  background: #52514e;
+}
+
+/* ---------- メジャー生活 ---------- */
+.mlb-box {
+  border: 1.5px solid #c9d7ef;
+  background: #f4f8ff;
+  border-radius: 12px;
+  padding: 8px 12px;
+  margin: 8px 0;
+}
+.mlb-meters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.mlb-meter {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 6px;
+  align-items: center;
+  font-size: 13px;
+}
+.mlb-meter .track {
+  height: 8px;
+  background: #e3e9f3;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.mlb-meter .fill {
+  height: 100%;
+  background: #2a78d6;
+}
+.mlb-meter .fill.bad {
+  background: #eb6834;
+}
+
+/* ---------- つながり ---------- */
+.chain {
+  list-style: none;
+  padding: 0;
+  margin: 6px 0 0;
+  font-size: 12px;
+  display: grid;
+  gap: 2px;
+}
+.chain li.ok {
+  color: var(--good);
+  font-weight: 700;
+}
+.chain li.next {
+  color: var(--ink);
+  font-weight: 700;
+}
+.chain li.next small {
+  display: block;
+  font-weight: 400;
+  margin-left: 14px;
+}
+.chain li.lock {
+  color: var(--muted);
+}
+
+/* ---------- エイジングカーブ ---------- */
+.ag-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+.ag-legend .sw {
+  display: inline-block;
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+.sw.tech,
+.ag-dot.tech {
+  background: #2a78d6;
+  fill: #2a78d6;
+}
+.sw.phys,
+.ag-dot.phys {
+  background: #eb6834;
+  fill: #eb6834;
+}
+.ag-chart {
+  width: 100%;
+  max-width: 460px;
+  height: auto;
+  display: block;
+}
+.ag-grid {
+  stroke: #e3e7e1;
+  stroke-width: 1;
+}
+.ag-axis {
+  font-size: 10px;
+  fill: #6b766b;
+}
+.ag-end {
+  font-size: 11px;
+  font-weight: 700;
+  fill: #1f2a1f;
+}
+.ag-zone {
+  fill: #f6f1e6;
+}
+.ag-line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.ag-line.tech {
+  stroke: #2a78d6;
+}
+.ag-line.phys {
+  stroke: #eb6834;
+}
+.ag-now {
+  stroke: #52514e;
+  stroke-width: 1;
+}
+.ag-nowlabel {
+  font-weight: 700;
+  fill: #1f2a1f;
+}
+.ag-dot {
+  stroke: #fff;
+  stroke-width: 2;
+}
+.ag-hit {
+  fill: transparent;
+}
+@media (max-width: 560px) {
+  .hbar-row {
+    grid-template-columns: 92px minmax(0, 1fr) 96px;
+    font-size: 12px;
+  }
+}

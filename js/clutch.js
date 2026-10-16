@@ -101,7 +101,7 @@
     const p = s.player;
     const c = own.clutch;
     const ch = G.clutchChoices(s, own).find((x) => x.id === choiceId) || G.clutchChoices(s, own)[0];
-    const off = G.COND_OFFSET[p.condition] + G.levelOffset(s);
+    const off = G.COND_OFFSET[p.condition] + G.levelOffset(s) + (G.gameOffset ? G.gameOffset(s, own) : 0);
     const b = p.batter;
     const pHit = G.clamp(0.22 + (b.contact + off - 50) * 0.004 + ch.hit - (c.pinch ? 0.02 : 0), 0.1, 0.55);
     const pBB = G.clamp(0.06 * ch.bb, 0.02, 0.3);
@@ -233,7 +233,7 @@
     const p = s.player;
     const c = own.clutch;
     const ch = G.clutchChoices(s, own).find((x) => x.id === choiceId) || G.clutchChoices(s, own)[0];
-    const q = G.pitchQuality(p) + G.COND_OFFSET[p.condition] + G.levelOffset(s);
+    const q = G.pitchQuality(p) + G.COND_OFFSET[p.condition] + G.levelOffset(s) + (G.gameOffset ? G.gameOffset(s, own) : 0);
     const pOk = G.clamp(0.6 + (q - 55) * 0.006 + ch.ok, 0.35, 0.92);
     const st = G.emptyPit();
     st.g = 1;

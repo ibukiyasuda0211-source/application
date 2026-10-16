@@ -207,6 +207,8 @@
     let pWin = G.clamp(0.5 + (myStr - oppStr) * 0.012, 0.25, 0.75);
     const res = { oppId, kind: ctx.kind, line: null, ap: apId, order: ctx.order, situation: ctx.situation };
     const off = G.levelOffset(s);
+    // 相性（左右・タイプ・球場）、球場の広さ、MLBでの疲れ・適応が、打球や三振の出やすさに響く
+    const park = G.envMods ? G.envMods(s, ctx) : {};
     let outcome = null;
     let score = null;
 
@@ -218,7 +220,7 @@
       const pas = [];
       // 勝負どころがある試合は、最後の1打席をプレイヤーの判断で
       const nNormal = ctx.clutch ? Math.max(0, ctx.nPA - 1) : ctx.nPA;
-      const st = G.simPlateAppearances(p, nNormal, off, mergeMods(ap.mods, opp.mods, matchMods), pas);
+      const st = G.simPlateAppearances(p, nNormal, off, mergeMods(ap.mods, opp.mods, matchMods, park), pas);
       st.g = 1;
       res.line = st;
       res.pas = pas;
@@ -268,7 +270,7 @@
         const total = p.pitcher.pitches.reduce((a, x) => a + x.level, 0);
         apMods = { ...apMods, run: total >= 12 ? 0.9 : total >= 7 ? 0.97 : 1.08 };
       }
-      const mods = mergeMods(apMods, matchMods);
+      const mods = mergeMods(apMods, matchMods, park);
       const inns = [];
       res.match = match;
       res.lineup = ctx.lineup;

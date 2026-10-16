@@ -201,7 +201,7 @@
         : { muscle: 9, agility: 8, technique: 9, mind: 6 };
     }
     const real = {};
-    for (const k in gain) real[k] = Math.round(gain[k] * mul * G.rf(0.8, 1.0));
+    for (const k in gain) real[k] = Math.round(gain[k] * mul * G.ageExpMul(p, k) * G.rf(0.8, 1.0));
     const staminaCost = t.stamina;
     p.stamina = G.clamp(p.stamina - staminaCost, 0, 100);
     let msg = `${t.name}をした。` + G.applyFx(s, { exp: real });
