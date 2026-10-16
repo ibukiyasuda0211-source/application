@@ -1848,3 +1848,99 @@ h3 {
     flex-wrap: wrap;
   }
 }
+.log-filter {
+  margin-top: 6px;
+}
+.log-filter .place {
+  padding: 3px 10px;
+  font-size: 12px;
+}
+.log-item.sns {
+  color: #1d6fa5;
+}
+
+/* ---------- 大きな買い物・投資 ---------- */
+.inv-group {
+  margin: 14px 0 6px;
+  font-size: 14px;
+}
+.shop-item.inv b {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.inv-steps {
+  display: inline-flex;
+  gap: 3px;
+}
+.inv-steps i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid var(--gold);
+  background: #fff;
+}
+.inv-steps i.on {
+  background: var(--gold);
+}
+.inv-owned {
+  color: var(--accent-dark);
+  font-weight: 800;
+}
+.shop-item.inv.done {
+  background: #fffaf0;
+}
+
+/* ---------- ここぞ！の場面 ---------- */
+.game-panel.clutch {
+  border: 2px solid #e8590c;
+  background: linear-gradient(180deg, #fff4e6, #fff 40%);
+}
+.clutch-banner {
+  display: inline-block;
+  background: #e8590c;
+  color: #fff;
+  font-weight: 800;
+  border-radius: 999px;
+  padding: 2px 12px;
+  font-size: 13px;
+  margin: 8px 0 4px;
+}
+.clutch-head {
+  font-size: 22px;
+  font-weight: 800;
+  margin: 4px 0;
+}
+.clutch-body {
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+.act.train.skill {
+  border-color: #e8a400;
+  background: #fffaf0;
+}
+.clutch-result {
+  border-radius: 12px;
+  padding: 8px 12px;
+  margin: 8px 0;
+  border: 2px solid var(--line);
+}
+.clutch-result b {
+  font-size: 16px;
+}
+.clutch-result.good {
+  border-color: var(--good);
+  background: #effaf3;
+}
+.clutch-result.bad {
+  border-color: var(--bad);
+  background: #fdf0f0;
+}
+.clutch-result.mid {
+  border-color: var(--gold);
+  background: #fffaf0;
+}
+.pa-list li.clutch-pa {
+  font-weight: 800;
+}

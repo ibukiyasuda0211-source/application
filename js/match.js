@@ -201,7 +201,7 @@
   };
 
   // ---------- 1試合の実行 ----------
-  G.executeOwnGame = (s, ctx, apId) => {
+  G.executeOwnGame = (s, ctx, apId, clutchId) => {
     const p = s.player;
     const { oppId, myStr, oppStr } = ctx;
     let pWin = G.clamp(0.5 + (myStr - oppStr) * 0.012, 0.25, 0.75);
@@ -216,7 +216,9 @@
       const match = opp.good.includes(ap.id) ? 'good' : opp.bad.includes(ap.id) ? 'bad' : null;
       const matchMods = match === 'good' ? { babip: 1.05, hr: 1.15, k: 0.88 } : match === 'bad' ? { babip: 0.95, hr: 0.85, k: 1.12 } : {};
       const pas = [];
-      const st = G.simPlateAppearances(p, ctx.nPA, off, mergeMods(ap.mods, opp.mods, matchMods), pas);
+      // 勝負どころがある試合は、最後の1打席をプレイヤーの判断で
+      const nNormal = ctx.clutch ? Math.max(0, ctx.nPA - 1) : ctx.nPA;
+      const st = G.simPlateAppearances(p, nNormal, off, mergeMods(ap.mods, opp.mods, matchMods), pas);
       st.g = 1;
       res.line = st;
       res.pas = pas;
@@ -231,9 +233,31 @@
         res.plays = plays;
         pWin = G.clamp(pWin - fld.e * 0.06 + fld.fine * 0.03 + fld.cs * 0.02 - fld.pb * 0.02, 0.08, 0.92);
       }
-      const d = G.chance(0.03);
-      outcome = d ? 'D' : G.chance(pWin) ? 'W' : 'L';
-      score = G.scoreline(outcome === 'W', d, Math.max(st.rbi, st.r));
+      if (ctx.clutch) {
+        const cl = G.resolveBatClutch(s, ctx, clutchId || G.autoClutch(s, ctx), st, pWin);
+        const pa = cl.pa;
+        st.pa++;
+        if (pa.code === 'BB') st.bb++;
+        else st.ab++;
+        if (['1B', '2B', '3B', 'HR'].includes(pa.code)) st.h++;
+        if (pa.code === '2B') st.d++;
+        if (pa.code === '3B') st.t++;
+        if (pa.code === 'HR') {
+          st.hr++;
+          st.r++;
+        }
+        if (pa.code === 'K') st.k++;
+        st.rbi += pa.rbi;
+        pas.push(pa);
+        outcome = cl.outcome;
+        score = cl.score;
+        res.clutchBox = cl.box;
+        res.clutch = { kind: 'bat', pa, verdict: cl.verdict, choice: cl.choice.name, skill: !!cl.choice.skill, situation: cl.situation };
+      } else {
+        const d = G.chance(0.03);
+        outcome = d ? 'D' : G.chance(pWin) ? 'W' : 'L';
+        score = G.scoreline(outcome === 'W', d, Math.max(st.rbi, st.r));
+      }
     } else if (ctx.kind === 'pit') {
       const ap = G.approachById(p, apId);
       const lu = G.OPP_LINEUPS.find((o) => o.id === ctx.lineup);
@@ -276,7 +300,14 @@
         res.startInning = 1;
       } else {
         outcome = ctx.pre;
-        const st = G.simPitching(p, 1, off, { mods, out: inns });
+        let st;
+        if (ctx.clutch) {
+          // ピンチの場面：1イニングをプレイヤーの判断で
+          const cl = G.clutchPitchLine(s, ctx, clutchId || G.autoClutch(s, ctx));
+          st = cl.st;
+          inns.push(st.r);
+          res.clutch = { kind: 'pit', how: cl.how, r: st.r, choice: cl.choice.name, skill: !!cl.choice.skill, situation: cl.situation };
+        } else st = G.simPitching(p, 1, off, { mods, out: inns });
         const lead = ctx.lead;
         if (ctx.role === 'CL' && outcome === 'W' && lead <= 3) {
           if (st.r >= lead) {
@@ -335,7 +366,13 @@
     const our = new Array(12).fill(0);
     const opp = new Array(12).fill(0);
     let decided = false;
-    if (res.kind === 'pit' && ctx.role === 'SP') {
+    if (res.clutchBox) {
+      // 勝負どころの試合は、イニングごとの得点まで決まっている
+      n = res.clutchBox.n;
+      res.clutchBox.our.forEach((r, i) => (our[i] = r));
+      res.clutchBox.opp.forEach((r, i) => (opp[i] = r));
+      decided = true;
+    } else if (res.kind === 'pit' && ctx.role === 'SP') {
       const inns = res.innings || [];
       inns.forEach((r, i) => (opp[i] = r));
       const rest = Math.max(0, theirs - inns.reduce((a, b) => a + b, 0));
@@ -486,12 +523,13 @@
         own = G.prepareOwnGame(s, x.home === p.teamId ? x.away : x.home);
         own.home = x.home === p.teamId;
         own.inter = !!day.inter;
+        G.planClutch(s, own);
       } else (pairs[x.lg] = pairs[x.lg] || []).push([x.home, x.away]);
     }
     gw.cur = { pairs, own, day };
   };
 
-  const executeDay = (s, apId) => {
+  const executeDay = (s, apId, clutchId) => {
     const p = s.player;
     const gw = s.gw;
     const { pairs, own, day } = gw.cur;
@@ -513,7 +551,7 @@
     s.dayCount = (s.dayCount || 0) + 1;
     gw.played = (gw.played || 0) + 1;
     if (own) {
-      res = G.executeOwnGame(s, own, apId);
+      res = G.executeOwnGame(s, own, apId, clutchId);
       res.date = day.d;
       res.inter = !!day.inter;
       res.box = G.buildBox(s, res, own);
@@ -536,7 +574,8 @@
       if (G.checkAch) G.checkAch(s, { game: res, date: day.d, own });
       if (res.kind === 'bat') {
         const l = res.line;
-        if (l.hr >= 2 || l.h >= 3) G.buzz(s, 'hotgame', { text: l.hr >= 2 ? `${l.hr}本塁打の大暴れ` : `${l.h}安打の猛打賞` });
+        if (res.clutch && ['sayonara', 'ahead'].includes(res.clutch.verdict)) G.buzz(s, 'hotgame', { text: res.clutch.verdict === 'sayonara' ? 'サヨナラ打' : '終盤の逆転打' });
+        else if (l.hr >= 2 || l.h >= 3) G.buzz(s, 'hotgame', { text: l.hr >= 2 ? `${l.hr}本塁打の大暴れ` : `${l.h}安打の猛打賞` });
         if (res.fld && res.fld.e && res.outcome === 'L') G.buzz(s, 'error');
         if (res.fld && res.fld.fine && res.outcome === 'W') G.buzz(s, 'fine');
       }
@@ -578,19 +617,30 @@
   const interactive = (s) => s.flags.gameMode !== 'auto';
 
   // 次に自分の判断が必要になるところまで進める
-  G.stepGames = (s, apId) => {
+  G.stepGames = (s, apId, clutchId) => {
     const gw = s.gw;
     gw.last = null;
     while (gw.d < gw.n) {
       if (!gw.cur) prepareDay(s);
       const needs = interactive(s) && !gw.cur.rain && gw.cur.own && gw.cur.own.kind;
+      if (gw.apChosen) apId = apId || gw.apChosen;
       if (needs && !apId) {
         gw.await = true;
         return;
       }
+      // 「ここぞ！」の場面が来る試合は、その場面で作戦を選ぶ
+      if (needs && gw.cur.own.clutch && !clutchId) {
+        gw.apChosen = apId;
+        gw.awaitClutch = true;
+        gw.await = false;
+        return;
+      }
       gw.await = false;
-      const res = executeDay(s, apId || G.defaultApproach(s));
+      gw.awaitClutch = false;
+      gw.apChosen = null;
+      const res = executeDay(s, apId || G.defaultApproach(s), clutchId);
       apId = null;
+      clutchId = null;
       if (needs) {
         gw.last = res;
         return;
@@ -603,9 +653,11 @@
   G.autoRestGames = (s) => {
     const gw = s.gw;
     gw.last = null;
+    gw.awaitClutch = false;
     while (gw.d < gw.n) {
       if (!gw.cur) prepareDay(s);
-      executeDay(s, G.defaultApproach(s));
+      executeDay(s, gw.apChosen || G.defaultApproach(s));
+      gw.apChosen = null;
     }
     G.finishGames(s);
   };

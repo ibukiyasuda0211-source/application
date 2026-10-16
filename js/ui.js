@@ -223,32 +223,73 @@
   ];
 
   const tabsView = (s) =>
-    `<div class="tabs">${TABS.filter((t) => !(s.after && ['upgrade', 'shop'].includes(t.id))).map(
+    `<div class="tabs">${TABS.filter((t) => !(s.after && t.id === 'upgrade')).map(
       (t) =>
         `<button class="tab ${ui.tab === t.id ? 'on' : ''}" data-act="tab" data-arg="${t.id}">${t.name}${
           (t.id === 'upgrade' && canUpgradeSomething(s.player)) || (t.id === 'ach' && s.achBadge) ? '<span class="dot"></span>' : ''
         }</button>`,
     ).join('')}</div>`;
 
+  // ログの絞り込み
+  const LOG_FILTERS = [
+    { id: 'all', name: 'すべて' },
+    { id: 'imp', name: '重要' },
+    { id: 'game', name: '試合結果' },
+    { id: 'usage', name: '起用' },
+    { id: 'life', name: '私生活' },
+    { id: 'train', name: '練習' },
+    { id: 'event', name: '出来事' },
+    { id: 'sns', name: 'SNS' },
+    { id: 'ach', name: '実績' },
+  ];
+  const logCat = (l) => {
+    if (l.cat) return l.cat;
+    const c = l.cls || '';
+    if (c.includes('game') || c === 'team') return 'game';
+    if (c === 'ach') return 'ach';
+    if (l.text.startsWith('【起用】')) return 'usage';
+    if (c === 'event') return 'event';
+    if (c === 'good' || c === 'bad' || c === 'year') return 'big';
+    return 'week';
+  };
+  const logMatch = (l, f) => {
+    if (f === 'all') return true;
+    const cat = logCat(l);
+    if (f === 'imp') return l.imp || ['good', 'bad', 'year', 'ach'].includes(l.cls) || cat === 'big';
+    if (f === 'game') return cat === 'game';
+    if (f === 'life') return cat === 'life';
+    return cat === f;
+  };
   const logView = (s) => {
+    const f = ui.logFilter || 'all';
+    const maxWeeks = (f === 'all' ? 14 : 40) * (ui.logMore || 1);
     const groups = [];
     let cur = null;
-    for (let i = s.log.length - 1; i >= 0 && groups.length < 14; i--) {
+    let rest = false;
+    for (let i = s.log.length - 1; i >= 0; i--) {
       const l = s.log[i];
+      if (!logMatch(l, f)) continue;
       const key = `${l.y}-${l.w}`;
+      if ((!cur || cur.key !== key) && groups.length >= maxWeeks) {
+        rest = true;
+        break;
+      }
       if (!cur || cur.key !== key) {
         cur = { key, y: l.y, w: l.w, items: [] };
         groups.push(cur);
       }
       cur.items.unshift(l);
     }
-    return `<div class="log">${groups
-      .map((g) => {
-        return `<div class="log-week"><h4>${g.y}年 ${G.weekLabel(g.y, g.w)}</h4>${g.items
-          .map((l) => `<div class="log-item ${l.cls || ''}">${br(l.text)}</div>`)
-          .join('')}</div>`;
-      })
-      .join('')}</div>`;
+    const chips = LOG_FILTERS.map((x) => `<button class="place ${f === x.id ? 'on' : ''}" data-act="logFilter" data-arg="${x.id}">${x.name}</button>`).join('');
+    return `<div class="log-filter places">${chips}</div><div class="log">${
+      groups
+        .map((g) => {
+          return `<div class="log-week"><h4>${g.y}年 ${G.weekLabel(g.y, g.w)}</h4>${g.items
+            .map((l) => `<div class="log-item ${l.cls || ''}">${br(l.text)}</div>`)
+            .join('')}</div>`;
+        })
+        .join('') || '<p class="muted">該当する記録はまだありません。</p>'
+    }${rest ? '<div class="center"><button class="btn sub small" data-act="logMore">もっと前を見る</button></div>' : ''}</div>`;
   };
 
   // 今週の選択をそろえる（選べなくなった選択肢は既定に戻す）
@@ -325,6 +366,30 @@
     </div>`;
   };
 
+  // 「ここぞ！」の場面
+  const clutchView = (s) => {
+    const own = s.gw.cur.own;
+    const t = G.clutchText(s, own);
+    const list = G.clutchChoices(s, own);
+    return `<div class="panel game-panel clutch">
+      ${gameMeta(s, own)}
+      <div class="clutch-banner">ここぞ！ 勝負どころ</div>
+      <div class="clutch-head">${esc(t.head)}</div>
+      <div class="clutch-body">${br(t.body)}</div>
+      <div class="section-title"><span class="step">🔥</span>この場面、どう勝負する？</div>
+      <div class="act-grid">${list
+        .map((c) => `<button class="act train ${c.skill ? 'skill' : ''}" data-act="clutch" data-arg="${c.id}"><b>${esc(c.name)}</b><small>${esc(c.desc)}</small></button>`)
+        .join('')}</div>
+    </div>`;
+  };
+
+  const clutchResult = (s, r) => {
+    if (!r.clutch) return '';
+    const c = r.clutch;
+    const v = G.clutchResultText(s, c.kind === 'bat' ? c : { ...c, how: c.how, r: c.r });
+    return `<div class="clutch-result ${v.cls}"><div class="muted">🔥 ${esc(c.situation.head)}・「${esc(c.choice)}」</div><b>${esc(v.text)}</b></div>`;
+  };
+
   const resultView = (s) => {
     const r = s.gw.last;
     const mark = r.outcome === 'W' ? '勝利' : r.outcome === 'L' ? '敗戦' : '引き分け';
@@ -334,13 +399,16 @@
     let detail;
     if (r.kind === 'bat') {
       const plays = (r.plays || []).map((t) => `<li class="${/失策|捕逸/.test(t) ? 'pa-bad' : 'pa-HR'}"><span>守備</span>${esc(t)}</li>`).join('');
-      const pas = r.pas.map((pa, i) => `<li class="pa-${pa.code}"><span>第${i + 1}打席</span>${esc(G.paText(pa))}</li>`).join('');
+      const pas = r.pas.map((pa, i) => `<li class="pa-${pa.code}${pa.clutch ? ' clutch-pa' : ''}"><span>${pa.clutch ? '🔥勝負' : `第${i + 1}打席`}</span>${esc(G.paText(pa))}</li>`).join('');
       const head = r.order === '守備固め' ? '<div class="muted" style="font-size:13px">終盤、守備固めで出場</div>' : '';
       const fl = r.fld ? G.fldLineText(r.fld) : '';
       detail = `${head}<ol class="pa-list">${pas}${plays}</ol>
         <div class="line">${r.line.pa ? G.batLineText(r.line) : '打席なし'}${fl ? `／${fl}` : ''}</div>`;
     } else {
-      detail = `<ol class="pa-list">${G.inningText(r.innings, r.startInning)
+      const inn = r.clutch
+        ? [`${r.startInning}回：2アウト${r.clutch.situation.head.split('2アウト')[1]}のピンチ${r.clutch.r ? `で${r.clutch.r}失点` : 'をしのぐ'}`]
+        : G.inningText(r.innings, r.startInning);
+      detail = `<ol class="pa-list">${inn
         .map((t) => `<li class="${/\d+失点/.test(t) ? 'pa-bad' : 'pa-OUT'}">${esc(t)}</li>`)
         .join('')}</ol><div class="line">${G.pitLineText(r.line)}</div>`;
     }
@@ -349,6 +417,7 @@
     return `<div class="panel game-panel">
       <div class="game-date">${G.fmtDate(r.date)}${r.inter ? '・交流戦' : ''}</div>
       <div class="game-head"><b class="res-${r.outcome}">${mark}</b> ${r.score[0]} - ${r.score[1]} <span class="muted">vs ${G.teamById(r.oppId).name}・作戦「${ap.name}」</span></div>
+      ${clutchResult(s, r)}
       ${boxHtml(r.box)}
       ${read}${detail}
       <div class="muted" style="font-size:13px">${week}</div>
@@ -404,6 +473,7 @@
   const actionTab = (s) => {
     if (s.after) return afterActionTab(s);
     if (s.gw && s.gw.last) return resultView(s);
+    if (s.gw && s.gw.awaitClutch) return clutchView(s);
     if (s.gw && s.gw.await) return pregameView(s);
     const { train, priv } = syncSelection(s);
     const mul = G.trainingMultiplier(s);
@@ -547,6 +617,18 @@
   const pitHead = (first = '') =>
     `<tr><th>${first}</th><th>登板</th><th>先発</th><th>勝</th><th>敗</th><th>S</th><th>H</th><th>投球回</th><th>被安打</th><th>奪三振</th><th>四球</th><th>失点</th><th>自責</th><th>防御率</th></tr>`;
 
+  // 日本代表の記録
+  const intlView = (s) => {
+    const hist = s.intlHist || [];
+    let next = s.year;
+    while (!G.isIntlYear(next) || (next === s.year && s.week > G.intlDates(next).finalW)) next++;
+    const rows = hist
+      .map((h) => `<tr><td>${h.year}</td><td>${esc(h.result)}${h.mvp ? '・MVP' : ''}</td><td style="text-align:left">${esc(h.text)}</td></tr>`)
+      .join('');
+    return `<h3 class="mt">日本代表 <span class="muted" style="font-size:12px">次の${G.INTL_NAME}は${next}年3月（前年の活躍で選ばれる）</span></h3>
+      ${hist.length ? `<div class="tbl-wrap"><table class="stats"><tr><th>年</th><th>成績</th><th>個人成績</th></tr>${rows}</table></div>` : '<p class="muted" style="font-size:13px">まだ代表に選ばれたことはない。</p>'}`;
+  };
+
   const raceView = (s) => {
     const p = s.player;
     const L = s.leaders;
@@ -578,7 +660,7 @@
     }
     return `<h3>タイトル争い <span class="muted" style="font-size:12px">（${G.LEAGUES.find((l) => l.id === G.teamById(p.teamId).league).name}）</span></h3>
     <div class="tbl-wrap"><table class="stats"><tr><th>部門</th><th>ライバル</th><th>記録</th><th>あなた</th></tr>${rows
-      .map((r) => `<tr><td>${r[0]}</td><td>${esc(r[1].name)}（${r[1].team}）</td><td>${r[2]}</td><td class="${r[4] ? 'lead' : ''}">${r[3]}</td></tr>`)
+      .map((r) => `<tr><td>${r[0]}</td><td>${r[1].rival ? '<span class="tag weapon">同期</span> ' : ''}${esc(r[1].name)}（${r[1].team}）</td><td>${r[2]}</td><td class="${r[4] ? 'lead' : ''}">${r[3]}</td></tr>`)
       .join('')}</table></div>
     <p class="muted" style="font-size:12px;margin-top:-8px">※ 首位打者は規定打席（443）、最優秀防御率は規定投球回（143）が必要</p>`;
   };
@@ -621,7 +703,7 @@
         <div class="tbl-wrap"><table class="stats">${fh}${fr('今季', s.stats.fld || G.emptyFld(), 'me')}${yrs}${yrs ? fr('通算', tot.fld, 'total') : ''}</table></div>
         <p class="muted" style="font-size:12px;margin-top:-8px">守備得点：平均的な守備と比べて何点防いだか（プラスほど良い）。守備の評価は打順・スタメン争いやゴールデングラブ賞にも影響する。</p>`;
     }
-    return `<div class="panel"><h3>${s.year}年 今季成績</h3>${cur}${defense}${raceView(s)}${career}</div>`;
+    return `<div class="panel"><h3>${s.year}年 今季成績</h3>${cur}${defense}${raceView(s)}${intlView(s)}${career}</div>`;
   };
 
   const teamTab = (s) => {
@@ -757,7 +839,10 @@
 
   const shopTab = (s) => {
     const p = s.player;
-    return `<div class="panel"><h3>ショップ <span class="muted" style="font-size:13px">所持金 ${G.fmtMoney(p.money)}</span></h3>
+    if (s.after) return investPanel(s);
+    // お金に余裕が出てきたら、大きな買い物を先に見せる
+    const big = p.money >= 3000;
+    return `${big ? investPanel(s) : ''}<div class="panel"><h3>ショップ <span class="muted" style="font-size:13px">所持金 ${G.fmtMoney(p.money)}</span></h3>
       <p class="muted" style="font-size:13px;margin-top:0">買い物では週は進みません。購入するとすぐに効果が出ます。</p>
       <div class="shop-grid">${G.SHOP_ITEMS.map((it) => {
         const owned = it.once && it.id === 'car' && p.car;
@@ -766,7 +851,32 @@
         return `<div class="shop-item"><b>${it.name}</b><small class="muted">${it.desc}</small>
           <div class="act-foot"><span class="price">${G.fmtMoney(it.price)}</span>
           <button class="btn small" data-act="buy" data-arg="${it.id}" ${ok ? '' : 'disabled'}>${owned ? '購入済' : trainerActive ? '契約中' : '購入'}</button></div></div>`;
-      }).join('')}</div></div>`;
+      }).join('')}</div></div>${big ? '' : investPanel(s)}`;
+  };
+
+  // 大きな買い物・投資
+  const investPanel = (s) => {
+    const p = s.player;
+    const list = G.investList(s).filter((x) => !s.after || x.group === 'future');
+    const groups = G.INVEST_GROUPS.map((g) => {
+      const items = list.filter((x) => x.group === g.id);
+      if (!items.length) return '';
+      return `<h4 class="inv-group">${g.name}</h4><div class="shop-grid">${items
+        .map((inv) => {
+          const lv = G.invLv(s, inv.id);
+          const next = inv.levels[lv];
+          const steps = inv.levels.length > 1 ? `<span class="inv-steps">${inv.levels.map((_, i) => `<i class="${i < lv ? 'on' : ''}"></i>`).join('')}</span>` : '';
+          const owned = lv ? `<small class="inv-owned">所有：${esc(inv.levels[lv - 1].name)}</small>` : '';
+          if (!next)
+            return `<div class="shop-item inv done"><b>${esc(G.investName(inv, p))} ${steps}</b>${owned}<div class="act-foot"><span class="muted">すべて購入済み</span></div></div>`;
+          return `<div class="shop-item inv"><b>${esc(G.investName(inv, p))} ${steps}</b>${owned}
+            <small>${lv ? '次：' : ''}${esc(next.name)}</small><small class="muted">${esc(next.desc)}</small>
+            <div class="act-foot"><span class="price">${G.fmtMoney(next.price)}</span>
+            <button class="btn small" data-act="invest" data-arg="${inv.id}" ${p.money >= next.price ? '' : 'disabled'}>購入</button></div></div>`;
+        })
+        .join('')}</div>`;
+    }).join('');
+    return `<div class="panel"><h3>大きな買い物・投資 <span class="muted" style="font-size:13px">一度買えばずっと効果が続く</span></h3>${groups}</div>`;
   };
 
   const titleCounts = (titles) => {
@@ -897,6 +1007,7 @@
     add(wd(c.awardsW, 1), 'season', '🏆 年間表彰式');
     add(wd(c.contractW, 1), 'season', '💴 契約更改');
     add(`${year}-12-31`, 'season', '🔔 大みそか');
+    for (const [d, cls, text] of G.intlEvents(s, year)) add(d, cls, text);
     // 私生活
     if (p.birthday) add(`${year}-${p.birthday}`, 'life', `🎂 自分の誕生日`);
     const pt = G.partner(s);
@@ -1235,7 +1346,7 @@
       if (!s) return;
       G.migrate(s);
       // 週の試合の途中で中断していたら、次に判断が必要なところまで進める
-      if (s.gw && !s.gw.await && !s.gw.last) G.stepGames(s, null);
+      if (s.gw && !s.gw.await && !s.gw.last && !s.gw.awaitClutch) G.stepGames(s, null);
       s.slot = Number(arg);
       ui.s = s;
       ui.tab = 'action';
@@ -1309,6 +1420,15 @@
       ui.calDay = ui.calDay === arg ? null : arg;
       render();
     },
+    logFilter: (arg) => {
+      ui.logFilter = arg;
+      ui.logMore = 1;
+      render();
+    },
+    logMore: () => {
+      ui.logMore = (ui.logMore || 1) + 1;
+      render();
+    },
     achCat: (arg) => {
       ui.achCat = arg;
       render();
@@ -1366,6 +1486,11 @@
     approach: (arg) => {
       if (!ui.s.gw || ui.s.queue.length) return;
       G.stepGames(ui.s, arg);
+      afterTurn();
+    },
+    clutch: (arg) => {
+      if (!ui.s.gw || !ui.s.gw.awaitClutch || ui.s.queue.length) return;
+      G.stepGames(ui.s, null, arg);
       afterTurn();
     },
     nextGame: () => {
@@ -1460,9 +1585,28 @@
       }
       s.player.money -= it.price;
       const msg = it.use(s.player, s);
-      G.log(s, `${it.name}を購入。${msg}`);
+      G.log(s, `${it.name}を購入。${msg}`, '', 'life');
       toast(msg);
       save();
+      render();
+    },
+    invest: (arg) => {
+      const s = ui.s;
+      const inv = G.INVESTMENTS.find((x) => x.id === arg);
+      const next = inv && inv.levels[G.invLv(s, arg)];
+      if (!next) return;
+      ui.confirm = {
+        text: `${next.name}を${G.fmtMoney(next.price)}で購入しますか？\n（${next.desc}）`,
+        yes: '購入する',
+        run: () => {
+          const msg = G.buyInvestment(s, arg);
+          if (msg) {
+            G.checkAch(s);
+            toast(msg);
+          } else toast('お金が足りません');
+          afterTurn();
+        },
+      };
       render();
     },
     choice: (arg) => {

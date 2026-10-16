@@ -240,6 +240,11 @@
       run: (s) => G.startPositionConsult(s),
     },
     {
+      id: 'stylecons', place: 'people', name: 'コーチにモデルチェンジを相談', desc: 'ベテランとしてのプレースタイルを見直す',
+      req: (s) => G.canConsultStyle(s),
+      run: (s) => G.startStyleConsult(s),
+    },
+    {
       id: 'friend', place: 'people', name: (s) => `親友の${s.people.friend.name}と電話`, desc: '地元の親友と語り合う',
       run: (s) => `${s.people.friend.name}と昔話で盛り上がった。` + fx(s, { aff: { friend: 5 }, happy: 3 }),
     },
@@ -273,6 +278,21 @@
         G.tryMeet(s, 'h_trainer', 0.4);
         return msg;
       },
+    },
+    {
+      id: 'jt_senpai', place: 'ballpark', cost: 30, name: (s) => `${s.people.senpai.name}先輩と合同自主トレ`, desc: (s) => `経験点・先輩との仲。続けると秘伝の伝授も（これまで${s.story.jt_senpai || 0}回）`,
+      req: (s) => G.canJointTrain(s, 'senpai'),
+      run: (s) => G.jointTraining(s, 'senpai'),
+    },
+    {
+      id: 'jt_rival', place: 'ballpark', cost: 30, name: (s) => `ライバル${s.people.rival.name}と合同自主トレ`, desc: '経験点が多い。続けると得意技を教わることも',
+      req: (s) => G.canJointTrain(s, 'rival'),
+      run: (s) => G.jointTraining(s, 'rival'),
+    },
+    {
+      id: 'jt_kohai', place: 'ballpark', cost: 20, name: (s) => `後輩の${s.people.kohai.name}を連れて自主トレ`, desc: '精神の経験点・後輩が育つ（費用は自分持ち）',
+      req: (s) => G.canJointTrain(s, 'kohai'),
+      run: (s) => G.jointTraining(s, 'kohai'),
     },
     {
       id: 'clinic', place: 'ballpark', cost: 3, name: '治療院でケア', desc: '体力を大きく回復',

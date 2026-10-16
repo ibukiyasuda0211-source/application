@@ -103,7 +103,7 @@
     return val >= 0.76 ? 6 : bottom;
   };
 
-  const usageLog = (s, text, cls = 'event') => G.log(s, `【起用】${text}`, cls);
+  const usageLog = (s, text, cls = 'event') => G.log(s, `【起用】${text}`, cls, 'usage');
 
   G.refreshTrust = (s) => {
     const p = s.player;

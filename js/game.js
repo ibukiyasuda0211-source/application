@@ -20,9 +20,14 @@
     { name: '疲労骨折', w: [6, 12], weight: 7 },
   ];
 
-  const log = (s, text, cls = '') => {
-    s.log.push({ y: s.year, w: s.week, text, cls });
-    if (s.log.length > 300) s.log.splice(0, s.log.length - 300);
+  // cat: ログの分類（game 試合 / usage 起用 / life 私生活 / train 練習 / event 出来事 / sns / ach 実績）
+  // imp: 重要な出来事（年表に残るもの）
+  const log = (s, text, cls = '', cat = null, imp = false) => {
+    const e = { y: s.year, w: s.week, text, cls };
+    if (cat) e.cat = cat;
+    if (imp) e.imp = true;
+    s.log.push(e);
+    if (s.log.length > 600) s.log.splice(0, s.log.length - 600);
   };
   G.log = log;
 
@@ -152,6 +157,7 @@
       acts.push({ id: 'mental', name: 'イメトレ', desc: '精神の経験点' });
     } else {
       for (const t of G.TRAININGS) {
+        if (t.minAge && p.age < t.minAge) continue;
         if (t.for === 'A' || (t.for === 'P') === pitcher) acts.push({ id: t.id, name: t.name, desc: t.desc, risky: t.risky });
       }
     }
@@ -199,9 +205,15 @@
     const staminaCost = t.stamina;
     p.stamina = G.clamp(p.stamina - staminaCost, 0, 100);
     let msg = `${t.name}をした。` + G.applyFx(s, { exp: real });
+    if (t.id === 'vetcare') {
+      p.vetCare = (p.vetCare || 0) + 1;
+      s.story.vetcare = (s.story.vetcare || 0) + 1;
+      msg += `（今年のケア${p.vetCare}週：冬の衰えが${Math.round(G.agingRelief(p) * 100)}%ゆるやかに）`;
+    }
     // ケガ判定
     let risk = (t.risky ? 0.035 : 0.004) + Math.max(0, 30 - p.stamina) * 0.004;
     if (p.skills.includes('durable')) risk *= 0.5;
+    risk *= G.injuryMul(s);
     if (G.chance(risk)) {
       const inj = G.injure(s);
       msg += `\nしまった！${inj.name}でケガをしてしまった…（全治${inj.weeks}週）`;
@@ -215,6 +227,7 @@
   G.doAction = (s, trainId, privId) => {
     const p = s.player;
     const results = [];
+    const cats = [];
     const t = G.trainingById(trainId);
     if (t && (!p.injury || trainId === 'mental')) {
       results.push(doTraining(s, t));
@@ -231,11 +244,16 @@
       if (G.chance(0.25)) msg += G.applyFx(s, { cond: 1 });
       results.push(msg);
     }
+    cats.push('train');
     if (privId) {
+      const hist = s.history.length;
       const pm = G.doPrivate(s, privId);
-      if (pm) results.push(pm);
+      if (pm) {
+        results.push(pm);
+        cats.push(s.history.length > hist ? 'life!' : 'life');
+      }
     }
-    for (const r of results) log(s, r);
+    results.forEach((r, i) => log(s, r, '', cats[i].replace('!', ''), cats[i].endsWith('!')));
     // シーズン中は試合へ（1試合ずつ作戦を選べる）
     if (G.phaseOf(s.week, s.year).id === 'season' && G.gamesInWeek(s.week, s.year) > 0) {
       G.startGames(s);
@@ -249,6 +267,7 @@
     const phase = G.phaseOf(s.week, s.year).id;
     const ov = G.overall(p);
 
+    if (phase !== 'season') s.lastGames = null;
     if (phase === 'open') {
       const r = G.simOpenGames(s, 4);
       G.addStats(s.open.bat, r.bat);
@@ -295,7 +314,7 @@
     p.money += (p.salary * 0.65) / 52;
 
     // 自然回復と調子の波
-    p.stamina = G.clamp(p.stamina + 6 + (p.skills.includes('recover') ? 4 : 0), 0, 100);
+    p.stamina = G.clamp(p.stamina + 6 + (p.skills.includes('recover') ? 4 : 0) + G.restBonus(s), 0, 100);
     const r = Math.random();
     if (r < 0.15) p.condition = Math.min(4, p.condition + 1);
     else if (r < 0.3 && !(p.hobby === 'fishing' && G.chance(0.5))) p.condition = Math.max(0, p.condition - 1);
@@ -306,6 +325,7 @@
 
     // 私生活
     G.weeklyLife(s);
+    G.snsWeekLog(s);
     // まれに首脳陣からポジション変更の打診
     G.positionOfferCheck(s);
 
@@ -336,7 +356,7 @@
     } else {
       const res = ev.run(s);
       s.queue.push({ kind: 'info', title: ev.title, text: text + '\n\n' + res });
-      log(s, `【${ev.title}】${res}`, 'event');
+      log(s, `【${ev.title}】${res}`, 'event', 'event');
     }
   };
 
@@ -748,16 +768,17 @@
     const p = s.player;
     let title = q.title;
     let text = '';
+    const hist = s.history.length;
     if (q.kind === 'life') {
       const c = G.lifeChoices(s, q)[idx];
       text = c.run(s, q, input);
       if (text === null) return;
-      log(s, `【${q.title}】${text}`, 'event');
+      log(s, `【${q.title}】${text}`, 'event', 'life', s.history.length > hist);
     } else if (q.kind === 'event') {
       const ev = G.EVENTS.find((e) => e.id === q.id);
       const c = ev.choices[idx];
       text = c.run(s);
-      log(s, `【${ev.title}】${text}`, 'event');
+      log(s, `【${ev.title}】${text}`, 'event', 'event', s.history.length > hist);
     } else if (q.kind === 'contract') {
       if (idx === 0) {
         p.salary = s.tmp.offer;
@@ -867,6 +888,7 @@
     scene(s, `${s.year}年 新年`, `新しい年が明けた。${p.age}歳、プロ${p.yearsPro + 1}年目のシーズンが始まる！${msgs.length ? '\n\n' + msgs.join('\n') : ''}`);
     log(s, `${s.year}年 プロ${p.yearsPro + 1}年目（${p.age}歳）`, 'year');
     G.yearlyLife(s);
+    G.styleOfferCheck(s);
   };
 
   G.pushCareer = (s) => {

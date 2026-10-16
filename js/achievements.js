@@ -13,6 +13,7 @@
     { id: 'title', name: 'タイトル・表彰' },
     { id: 'team', name: 'チーム・移籍' },
     { id: 'mlb', name: 'メジャー' },
+    { id: 'japan', name: '日本代表' },
     { id: 'hard', name: '試練' },
     { id: 'love', name: '恋愛・結婚' },
     { id: 'family', name: '家族' },
@@ -101,6 +102,16 @@
   A('bat', 'ph_hr', '代打本塁打', '代打の一振りでスタンドへ', (c) => batG(c) && c.g.order === '代打' && c.gl.hr > 0, BAT);
   A('bat', 'read', '読みが当たった', '試合前の作戦が相手にはまり、ヒットを打った', (c) => batG(c) && c.g.match === 'good' && c.gl.h > 0, BAT);
 
+  // ここぞ！の場面（打者）
+  const clutchV = (c) => (batG(c) && c.g.clutch ? c.g.clutch.verdict : null);
+  A('bat', 'sayonara', 'サヨナラ打', '9回裏、勝負どころで試合を決めた', (c) => clutchV(c) === 'sayonara', BAT);
+  A('bat', 'gyakuten', '逆転打', '終盤の勝負どころで試合をひっくり返した', (c) => clutchV(c) === 'ahead', BAT);
+  A('bat', 'doten', '土壇場の同点打', '終盤の勝負どころで追いついた', (c) => clutchV(c) === 'tie', BAT);
+  A('bat', 'clutchfail', 'あと一本が…', '勝負どころで凡退した', (c) => clutchV(c) === 'fail', { ...BAT, bitter: true });
+  A('bat', 'clutchskill', '能力が光った', '特殊能力を生かした作戦で勝負どころを制した', (c) => batG(c) && c.g.clutch && c.g.clutch.skill && clutchV(c) !== 'fail', BAT);
+  A('bat', 'clutch5', '勝負強い男', '勝負どころで5回結果を出した', (c) => c.d.clutchOk >= 5, BAT);
+  A('bat', 'sayonaraHR', 'サヨナラホームラン', '最高の一振りで試合を終わらせた', (c) => clutchV(c) === 'sayonara' && c.g.clutch.pa.code === 'HR', { ...BAT, hidden: true });
+
   // ===== 投球 =====
   A('pit', 'k10', '2ケタ奪三振', '1試合10奪三振以上', (c) => pitG(c) && c.gl.k >= 10, PIT);
   A('pit', 'k13', '奪三振ショー', '1試合13奪三振以上', (c) => pitG(c) && c.gl.k >= 13, { ...PIT, hidden: true });
@@ -116,6 +127,11 @@
   A('pit', 'allwin', '全球団から勝利', 'リーグの全球団から白星を挙げた', (c) => c.allOpp(c.d.winOpp), PIT);
   A('pit', 'blown', 'セーブ失敗', 'リードを守れなかった夜', (c) => pitG(c) && !!c.g.blown, { ...PIT, bitter: true });
   A('pit', 'ko', 'ノックアウト', '先発して5失点以上…', (c) => pitG(c) && c.gl.gs && c.gl.r >= 5, { ...PIT, bitter: true });
+  const pinch = (c) => (pitG(c) && c.g.clutch ? c.g.clutch.how : null);
+  A('pit', 'pinch', 'ピンチ脱出', '一打逆転のピンチを無失点でしのいだ', (c) => ['K', 'OUT'].includes(pinch(c)), PIT);
+  A('pit', 'pinchK', '三振で締めた', 'ピンチの場面を三振で切り抜けた', (c) => pinch(c) === 'K', PIT);
+  A('pit', 'pinchfail', '痛恨の一球', 'ピンチの場面で打たれてしまった', (c) => !!pinch(c) && !['K', 'OUT'].includes(pinch(c)), { ...PIT, bitter: true });
+  A('pit', 'pinch5', '火消しのスペシャリスト', 'ピンチを5回しのいだ', (c) => c.d.clutchOk >= 5, PIT);
   A('pit', 'read', '読みが当たった', '試合前の作戦がはまり、無失点で抑えた', (c) => pitG(c) && c.g.match === 'good' && c.gl.r === 0, PIT);
 
   // ===== 守備・走塁 =====
@@ -190,6 +206,9 @@
   [[5, 'プロ5年目'], [10, 'プロ10年目'], [15, 'プロ15年目'], [20, 'プロ20年目']].forEach(([n, name]) =>
     A('career', `y${n}`, name, `現役のままプロ${n}年目を迎えた`, (c) => !c.s.retired && c.p.yearsPro + 1 >= n),
   );
+  A('career', 'vetcare', 'ベテランの調整術', 'ベテラン調整で体をケアした', (c) => (c.s.story.vetcare || 0) >= 1);
+  A('career', 'vetcare30', '衰えに抗う', 'ベテラン調整を通算30週', (c) => (c.s.story.vetcare || 0) >= 30);
+  A('career', 'style', 'モデルチェンジ', 'ベテランとしてプレースタイルを変えた', (c) => !!c.p.style);
   A('career', 'age40', '不惑の現役', '40歳になっても現役を続けた', (c) => !c.s.retired && c.p.age >= 40);
 
   // ===== タイトル・表彰 =====
@@ -221,6 +240,9 @@
   A('title', 'meikyu', '名球会入り', '2000安打・200勝・250セーブのいずれかを達成', (c) => (c.pit ? c.cp.w >= 200 || c.cp.s >= 250 : c.cb.h >= 2000), { hidden: true });
 
   // ===== チーム・移籍 =====
+  A('team', 'raceTop', 'タイトル争いの主役', 'タイトル争いでトップに立った', (c) => !!c.s.race && Object.values(c.s.race).some((v) => v === 'ahead'));
+  A('team', 'raceWin', '同期対決を制す', 'ライバルとのタイトル争いに勝った', (c) => (c.s.story.raceWon || 0) >= 1);
+  A('team', 'raceLost', '同期に敗れる', 'ライバルにタイトルを奪われた', (c) => (c.s.story.raceLost || 0) >= 1, { bitter: true });
   A('team', 'pennant', 'リーグ優勝', 'チームがリーグ優勝を果たした', (c) => c.hist(/チームがリーグ優勝/));
   A('team', 'pennant3', '黄金時代', 'リーグ優勝3回', (c) => c.histCount(/チームがリーグ優勝/) >= 3);
   A('team', 'japanseries', '日本シリーズ進出', 'クライマックスシリーズを勝ち抜いた', (c) => !!(c.s.final && c.s.final.cs) && !c.isMLB);
@@ -244,6 +266,19 @@
   A('mlb', 'ws', 'ワールドシリーズ制覇', '世界一のチームの一員になった', (c) => c.hasTitle('ワールドシリーズ制覇'), { hidden: true });
   A('mlb', 'mtitle', 'メジャーのタイトル', 'メジャーでタイトル・表彰を受けた', (c) => c.s.titles.some((t) => /^MLB|サイ・ヤング|シルバースラッガー|ゴールドグラブ/.test(t.name)), { hidden: true });
   A('mlb', 'return', '日本球界に復帰', 'メジャーから日本に戻ってきた', (c) => c.hist(/日本球界に復帰/));
+
+  // ===== 日本代表 =====
+  const intl = (c) => c.s.intlHist || [];
+  A('japan', 'select', '日本代表', `${G.INTL_NAME || '国際大会'}の日本代表に選ばれた`, (c) => (c.s.flags.japanCount || 0) >= 1);
+  A('japan', 'select2', '代表の常連', '日本代表に2大会選ばれた', (c) => (c.s.flags.japanCount || 0) >= 2);
+  A('japan', 'select3', '代表の顔', '日本代表に3大会選ばれた', (c) => (c.s.flags.japanCount || 0) >= 3, { hidden: true });
+  A('japan', 'champ', '世界一', '日本代表として世界の頂点に立った', (c) => intl(c).some((h) => h.result === '優勝'));
+  A('japan', 'mvp', '大会MVP', '国際大会のMVPに選ばれた', (c) => intl(c).some((h) => h.mvp), { hidden: true });
+  A('japan', 'second', '準優勝', 'あと一歩で世界一を逃した', (c) => intl(c).some((h) => h.result === '準優勝'), { bitter: true });
+  A('japan', 'hr', '世界に放った一発', '国際大会でホームランを打った', (c) => intl(c).some((h) => h.hr > 0), BAT);
+  A('japan', 'win', '世界の舞台で勝利', '国際大会で勝利投手になった', (c) => intl(c).some((h) => h.w > 0), PIT);
+  A('japan', 'save', '世界の守護神', '国際大会でセーブを挙げた', (c) => intl(c).some((h) => h.s > 0), PIT);
+  A('japan', 'champ2', '連覇', '国際大会で2度の世界一', (c) => intl(c).filter((h) => h.result === '優勝').length >= 2, { hidden: true });
 
   // ===== 試練 =====
   A('hard', 'injury', '初めてのケガ', '体は資本', (c) => !!c.p.injury || c.buzz('injury') > 0, { bitter: true });
@@ -319,6 +354,10 @@
   A('people', 'reporter', '番記者の信頼', '記者が特集記事を書いてくれた', (c) => !!c.s.story.reporter_feature);
   A('people', 'parents', '自慢の息子', '両親との仲が95以上', (c) => aff(c, 'parents') >= 95);
   A('people', 'allfriends', '人望の厚い男', '家族・仲間6人との仲がすべて70以上', (c) => ['senpai', 'rival', 'coach', 'kohai', 'parents', 'friend'].every((id) => aff(c, id) >= 70), { hidden: true });
+  A('people', 'jt', '合同自主トレ', '仲間と一緒に自主トレをした', (c) => ['jt_senpai', 'jt_rival', 'jt_kohai'].some((k) => c.s.story[k]));
+  A('people', 'teachS', '先輩の秘伝', '合同自主トレで先輩から特殊能力を伝授された', (c) => !!c.s.story.jt_senpai_taught);
+  A('people', 'teachR', 'ライバルの得意技', 'ライバルから得意技を教わった', (c) => !!c.s.story.jt_rival_taught);
+  A('people', 'kohaiGrow', '後輩を育てる', '一緒に自主トレした後輩が頭角を現した', (c) => !!c.s.story.jt_kohai_grow);
   A('people', 'senpaiDinner', '先輩にごちそうさま', '先輩と10回食事に行った', (c) => c.priv('senpai') >= 10);
   A('people', 'kohaiTreat', '後輩思い', '後輩に10回おごった', (c) => c.priv('kohai') >= 10);
   A('people', 'rivalRetire', 'ライバルの引退', '同期のライバルがユニフォームを脱いだ', (c) => c.seen('ライバルの引退') || c.hist(/ライバル.*引退/));
@@ -337,6 +376,16 @@
   A('life', 'debt', '金欠', '所持金がマイナスになった', (c) => c.p.money < 0, { bitter: true });
   A('life', 'luxury', 'ぜいたくな暮らし', '暮らしぶりを「ぜいたく」にした', (c) => c.p.lifestyle === 'luxury');
   A('life', 'frugal', '節約生活', '暮らしぶりを「節約」にした', (c) => c.p.lifestyle === 'frugal');
+  A('life', 'care', '体への投資', '体のケア設備を導入した', (c) => G.invLv(c.s, 'care') >= 1);
+  A('life', 'care3', '専属メディカルチーム', '体のケア設備を最高レベルに', (c) => G.invLv(c.s, 'care') >= 3);
+  A('life', 'lab', '解析ラボ', '自分専用の解析ラボを作った', (c) => G.invLv(c.s, 'lab') >= 1);
+  A('life', 'gear', '特注の道具', 'バットやグラブを特注した', (c) => ['bat', 'glove', 'spikes', 'pglove', 'pspikes'].some((id) => G.invLv(c.s, id) >= 1));
+  A('life', 'gearMax', '名工の一点もの', '特注の道具を最高の段階まで仕上げた', (c) => ['bat', 'glove', 'pglove'].some((id) => G.invLv(c.s, id) >= 3));
+  A('life', 'academy', 'アカデミー設立', '子供向けの野球アカデミーを作った', (c) => G.invLv(c.s, 'academy') >= 1);
+  A('life', 'academy5', 'アカデミーの大株主', 'アカデミーに5口出資した', (c) => G.invLv(c.s, 'academy') >= 5);
+  A('life', 'academyPro', 'アカデミーからプロへ', 'アカデミー出身の子がプロになった', (c) => (c.s.story.academyPros || 0) >= 1, { hidden: true });
+  A('life', 'villa', '海辺の別荘', '別荘を手に入れた', (c) => G.invLv(c.s, 'villa') >= 1);
+  A('life', 'stadium', '自分の名前の球場', 'ふるさとに球場を寄付した', (c) => G.invLv(c.s, 'stadium') >= 1, { hidden: true });
   A('life', 'hobby', '趣味を見つけた', '打ち込める趣味ができた', (c) => !!c.p.hobby);
   A('life', 'hobby10', '趣味の腕前', '趣味レベル10', (c) => c.p.hobbyLv >= 10);
   A('life', 'hobby25', '趣味の名人', '趣味レベル25', (c) => c.p.hobbyLv >= 25);
@@ -384,6 +433,7 @@
   A('after', 'drama', '俳優デビュー', 'ドラマで新人賞', (c) => c.hist(/ドラマで新人賞/), { hidden: true });
   A('after', 'shops', 'チェーン店', '飲食店を4店舗に', (c) => c.hist(/4号店をオープン/));
   A('after', 'scout', '名スカウト', '見出した選手がドラフト1位', (c) => c.hist(/スカウトした.*ドラフト1位/));
+  A('after', 'academyHead', 'アカデミー理事長', '引退後、野球アカデミーの理事長になった', (c) => !!c.s.after && c.s.after.career === 'academy');
   A('after', 'kids', '名伯楽', '少年野球の教え子がプロ入り', (c) => !!c.s.after && c.s.after.titles.some((t) => /教え子/.test(t)));
   A('after', 'ob', 'OB戦', 'OB戦に出場した', (c) => c.seen('OB戦'));
   A('after', 'age60', '還暦', '60歳を迎えた', (c) => c.p.age >= 60);
@@ -408,6 +458,7 @@
   // 試合ごとの連続記録などを更新
   const trackGame = (s, d, g) => {
     const l = g.line;
+    if (g.clutch && (g.clutch.kind === 'bat' ? g.clutch.verdict !== 'fail' : ['K', 'OUT'].includes(g.clutch.how))) d.clutchOk = (d.clutchOk || 0) + 1;
     if (g.kind === 'bat' && l) {
       const slot = parseInt(g.order, 10);
       if (slot) d.slots[slot] = 1;

@@ -136,7 +136,7 @@
     const w = G.afterDef(s).works.find((x) => x.id === workId) || G.afterDef(s).works[0];
     const msgs = [w.run(s)];
     if (privId) msgs.push(G.doPrivate(s, privId));
-    for (const m of msgs) if (m) G.log(s, m);
+    msgs.forEach((m, i) => m && G.log(s, m, '', i === 0 ? 'train' : 'life'));
     checkPromotion(s);
     p.money += G.afterIncome(s);
     p.stamina = G.clamp(p.stamina + 10, 0, 100);

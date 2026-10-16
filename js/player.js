@@ -282,13 +282,18 @@
     const over = p.age - start;
     const msgs = [];
     if (over <= 0) return msgs;
-    const amt = Math.ceil(over * 1.6);
+    // ベテラン調整・ケア設備で衰えがゆるやかに。モデルチェンジした能力は衰えが半分
+    const relief = G.agingRelief ? G.agingRelief(p) : 0;
+    p.vetCare = 0;
+    const keep = G.agingKeep ? G.agingKeep(p) : [];
+    const half = (k, d) => (keep.includes(k) ? Math.floor(d / 2) : d);
+    const amt = Math.max(1, Math.ceil(over * 1.6 * (1 - relief)));
     if (G.isPitcher(p)) {
       const pt = p.pitcher;
-      const dv = G.ri(0, Math.ceil(amt * 0.7));
+      const dv = half('velocity', G.ri(0, Math.ceil(amt * 0.7)));
       pt.velocity = Math.max(120, pt.velocity - dv);
-      pt.control = Math.max(1, pt.control - G.ri(0, amt));
-      pt.stamina = Math.max(1, pt.stamina - G.ri(1, amt + 1));
+      pt.control = Math.max(1, pt.control - half('control', G.ri(0, amt)));
+      pt.stamina = Math.max(1, pt.stamina - half('stamina', G.ri(1, amt + 1)));
       for (const x of pt.pitches) {
         if (x.level > 1 && G.chance(Math.min(0.8, over * 0.08))) x.level--;
       }
@@ -296,11 +301,12 @@
     } else {
       const b = p.batter;
       for (const k of Object.keys(b)) {
-        const d = G.ri(0, amt + (k === 'speed' ? 1 : 0));
+        const d = half(k, G.ri(0, amt + (k === 'speed' ? 1 : 0)));
         b[k] = Math.max(1, b[k] - d);
       }
     }
     msgs.push('年齢による衰えを感じる…');
+    if (relief >= 0.2) msgs.push('それでも日々の体のケアのおかげで、衰えは最小限に抑えられた。');
     return msgs;
   };
 

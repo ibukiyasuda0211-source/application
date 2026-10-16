@@ -117,6 +117,12 @@
         hotgame: () => add(1, 3, `${today}${fam}、${b.text}は最高だった`, `${fam}の${b.text}、ヒーローインタビューまで最高だった`),
         error: () => add(-1, 3, `${today}試合、${fam}のエラーが痛かった…`, `${today}試合は${fam}の守備に泣かされた`),
         poschange: () => add(0, 3, `${fam}が${b.pos}にコンバートか。どうなるか楽しみ`, `${fam}の${b.pos}、まだぎこちないけど期待してる`, `${fam}を${b.pos}で使うのは賛否あるだろうな`),
+        style: () => add(0, 3, `${fam}、${b.name}か。ベテランの生き残り方、応援したい`, `${fam}のモデルチェンジ、吉と出るか凶と出るか`, `${b.name}の${fam}、新しい一面が見られそう`),
+        japan: () => add(1, 4, `${fam}日本代表選出おめでとう！`, `代表のユニフォームを着た${fam}、楽しみすぎる`, `${fam}が日の丸を背負うのか…胸アツ`),
+        worldchamp: () => add(1, 5, `日本代表、世界一おめでとう！！${fam}もよくやった`, `世界一の瞬間、${fam}の笑顔で泣いた`),
+        intllose: () => add(0, 3, `日本代表、悔しい…でも${fam}はよく戦った`, `次の大会こそ世界一を。${fam}頼んだぞ`),
+        race: () => add(b.sent || 0, 4, b.text),
+        jointrain: () => add(1, 2, `${fam}と${b.name}の合同自主トレ写真、仲良すぎる`, `${b.name}と自主トレする${fam}、今年は期待できそう`),
         fine: () => add(1, 3, `${today}${fam}のファインプレー、何回でも見られる`, `${today}試合、${fam}の守備で締まった`),
       }[b.type];
       if (t) t();
@@ -202,5 +208,14 @@
     const score = list.length ? Math.round(50 + (50 * (pos - neg)) / list.length) : 50;
     const label = score >= 75 ? '大人気' : score >= 60 ? '好評' : score >= 45 ? '賛否両論' : score >= 30 ? '批判多め' : '炎上ぎみ';
     return { posts: list, score, label, pos, neg, neutral: list.length - pos - neg, followers: p.followers };
+  };
+
+  // 話題になった週は、いちばん反響の大きかった投稿をログに残す
+  G.snsWeekLog = (s) => {
+    const now = G.absWeek(s);
+    if (!(s.buzzLog || []).some((b) => b.w === now)) return;
+    const r = G.egoSearch(s);
+    const top = r.posts.filter((x) => x.sent !== 0).sort((a, b) => b.likes - a.likes)[0];
+    if (top) G.log(s, `📱 SNSの反応：「${top.text}」（♡${top.likes}）`, 'sns', 'sns');
   };
 })();
