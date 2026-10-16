@@ -122,7 +122,8 @@
   G.buyInvestment = (s, id) => {
     const p = s.player;
     const inv = G.INVESTMENTS.find((x) => x.id === id);
-    if (!inv || (s.after && inv.group !== 'future')) return null;
+    if (!inv || (s.after && !['future', 'legacy'].includes(inv.group))) return null;
+    if (inv.req && inv.req(s)) return null;
     const lv = G.invLv(s, id);
     const next = inv.levels[lv];
     if (!next || p.money < next.price) return null;
@@ -162,7 +163,11 @@
       G.scene(s, '球場の完成', `ふるさとに寄付した少年野球場が完成した。\n入口には「${p.name.split(' ')[0]}スタジアム」の文字。\n\n始球式に招かれると、子供たちの大歓声に包まれた。両親は涙を浮かべていた。`, { big: '球場寄付' });
     }
     if (id === 'care' && lv === 0) s.history.push({ year: s.year, text: '自宅に高圧酸素カプセルを導入' });
-    const text = `${next.name}を購入した！${msgs.length ? `（${msgs.join('・')}）` : ''}`;
+    if (inv.onBuy) {
+      const extra = inv.onBuy(s, lv + 1, next);
+      if (extra) msgs.push(extra);
+    }
+    const text = `${next.verb ? next.verb : `${next.name}を購入した`}！${msgs.length ? `（${msgs.join('・')}）` : ''}`;
     G.log(s, `💰 ${text}`, 'good', 'life', true);
     return text;
   };

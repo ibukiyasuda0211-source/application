@@ -237,6 +237,7 @@
   A('title', 'titles3', 'タイトルホルダー', 'タイトル・表彰を通算3つ', (c) => c.awardCount >= 3);
   A('title', 'titles10', '球界の顔', 'タイトル・表彰を通算10', (c) => c.awardCount >= 10);
   A('title', 'mvp3', '3度目のMVP', 'MVPを3回受賞', (c) => c.titleCount('MVP') >= 3, { hidden: true });
+  A('title', 'blazer', '名球会のブレザー', '名球会のブレザーに袖を通した', (c) => !!c.s.flags.blazer, { hidden: true });
   A('title', 'meikyu', '名球会入り', '2000安打・200勝・250セーブのいずれかを達成', (c) => (c.pit ? c.cp.w >= 200 || c.cp.s >= 250 : c.cb.h >= 2000), { hidden: true });
 
   // ===== チーム・移籍 =====
@@ -250,7 +251,12 @@
   A('team', 'champ3', '3度の日本一', '日本一を3回経験した', (c) => c.histCount(/^日本一$/) >= 3, { hidden: true });
   A('team', 'last', '最下位', 'チームが最下位に沈んだ…', (c) => !!c.s.final && c.s.final.rank === (c.isMLB ? 10 : 6), { bitter: true });
   A('team', 'fa', 'FA移籍', 'FA権を行使して新天地へ', (c) => c.hist(/FAで.*に移籍/));
-  A('team', 'stay', '生涯一球団', 'FA権を得ても残留を選んだ', (c) => !!c.s.flags.faYear && !c.hist(/移籍/) && c.p.league !== 'mlb' && c.seenAny(/に残留することを決めた/));
+  A('team', 'stay', '生涯一球団', 'FA権を得ても残留を選んだ', (c) => !!c.s.flags.faYear && !c.hist(/移籍/) && c.p.league !== 'mlb' && (c.hist(/年契約/) || c.seenAny(/に残留することを決めた/)));
+  A('team', 'trade', 'トレード移籍', 'トレードで新しいチームへ', (c) => c.hist(/トレードで.*に移籍/));
+  A('team', 'traderq', 'トレード志願', '出場機会を求めて球団に移籍を願い出た', (c) => c.priv('traderequest') >= 1, { bitter: true });
+  A('team', 'multi', '複数年契約', '球団と複数年契約を結んだ', (c) => c.hist(/\d年契約/));
+  A('team', 'faDeclare', 'FA宣言', 'FA権を行使して他球団の話を聞いた', (c) => c.buzz('fadeclare') > 0);
+  A('team', 'bigdeal', '大型契約', '年俸3億円以上の複数年契約を結んだ', (c) => !!c.p.contract && c.p.contract.salary >= 30000);
   A('team', 'tryout', 'トライアウト合格', 'トライアウトから新しいチームへ', (c) => c.hist(/トライアウトを経て/));
   A('team', 'number1', 'エースナンバー級', '背番号1〜19を背負っている', (c) => c.p.number >= 1 && c.p.number <= 19 && !c.s.retired);
   A('team', 'cs_firstgame', 'ポストシーズン', 'チームがクライマックスシリーズに出場した', (c) => !!c.s.final && c.s.final.rank <= 3 && c.week >= c.cal.csW);
@@ -386,6 +392,10 @@
   A('life', 'academyPro', 'アカデミーからプロへ', 'アカデミー出身の子がプロになった', (c) => (c.s.story.academyPros || 0) >= 1, { hidden: true });
   A('life', 'villa', '海辺の別荘', '別荘を手に入れた', (c) => G.invLv(c.s, 'villa') >= 1);
   A('life', 'stadium', '自分の名前の球場', 'ふるさとに球場を寄付した', (c) => G.invLv(c.s, 'stadium') >= 1, { hidden: true });
+  A('life', 'donate', '社会貢献', '1億円を寄付した', (c) => (c.s.story.donated || 0) >= 10000);
+  A('life', 'donate10', '慈善家', '累計10億円を寄付した', (c) => (c.s.story.donated || 0) >= 100000, { hidden: true });
+  A('life', 'foundation', '財団の設立', '自分の名前の財団を作った', (c) => G.invLv(c.s, 'foundation') >= 1);
+  A('life', 'museum', '自分の記念館', 'ふるさとに記念館が建った', (c) => G.invLv(c.s, 'museum') >= 1, { hidden: true });
   A('life', 'hobby', '趣味を見つけた', '打ち込める趣味ができた', (c) => !!c.p.hobby);
   A('life', 'hobby10', '趣味の腕前', '趣味レベル10', (c) => c.p.hobbyLv >= 10);
   A('life', 'hobby25', '趣味の名人', '趣味レベル25', (c) => c.p.hobbyLv >= 25);
@@ -424,6 +434,11 @@
 
   // ===== 引退後の人生 =====
   A('after', 'retire', '現役引退', 'ユニフォームを脱いだ', (c) => !!c.s.retired);
+  A('after', 'farewell', '引退試合', '満員の球場で最後の試合を戦った', (c) => c.seen('引退試合'));
+  A('after', 'retiredNum', '永久欠番', '背番号が永久欠番になった', (c) => !!c.s.flags.retiredNumber, { hidden: true });
+  A('after', 'hall', '野球殿堂入り', '野球殿堂に名前が刻まれた', (c) => !!c.s.flags.hall, { hidden: true });
+  A('after', 'owner', '球団オーナー', '古巣の球団を買収してオーナーになった', (c) => !!c.s.owner, { hidden: true });
+  A('after', 'ownerWin', 'オーナーとして優勝', 'オーナーとしてリーグ優勝を味わった', (c) => c.hist(/オーナーとして.*リーグ優勝/), { hidden: true });
   A('after', 'second', '第二の人生', '引退後の道を歩み始めた', (c) => !!c.s.after);
   A('after', 'promote', '新天地で昇進', '引退後の仕事でステップアップした', (c) => !!c.s.after && c.s.after.level >= 1);
   A('after', 'top', '第二の人生の頂点', '引退後の仕事で最高の地位に', (c) => !!c.s.after && c.s.after.level >= G.afterDef(c.s).ranks(c.s).length - 1, { hidden: true });

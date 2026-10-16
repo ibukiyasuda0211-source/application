@@ -438,6 +438,49 @@
     </details>`;
   };
 
+  // ---------- おまかせ進行 ----------
+  const autoPanel = (s) => {
+    const plan = G.autoPlan(s);
+    const chip = (key, x) => `<button class="choice ${plan[key] === x.id ? 'on' : ''}" data-act="autoPlan" data-arg="${key}:${x.id}">${esc(x.name)}<small>${esc(x.desc)}</small></button>`;
+    return `<details class="settings auto-panel" ${ui.autoOpen ? 'open' : ''}><summary data-act="autoOpen">⏩ おまかせで進める</summary>
+      <div class="auto-targets">${G.autoTargets(s)
+        .map((t) => `<button class="btn ${t.id === 'w4' ? 'sub' : ''} small" data-act="autoGo" data-arg="${t.id}">${esc(t.name)}</button>`)
+        .join('')}</div>
+      <div class="muted" style="font-size:12px">選択が必要な出来事・大きなケガ・引退の判断があると、そこで止まります。途中のお知らせは、あとでまとめて読めます。試合は「いつもの作戦」で進みます。</div>
+      ${s.after ? '' : `<div class="mt" style="font-size:13px;font-weight:700">練習の方針</div><div class="choices">${G.AUTO_TRAIN.map((x) => chip('train', x)).join('')}</div>`}
+      <div class="mt" style="font-size:13px;font-weight:700">オフの過ごし方の方針</div><div class="choices">${G.AUTO_PRIV.map((x) => chip('priv', x)).join('')}</div>
+      <button class="choice ${plan.choose ? 'on' : ''} mt" data-act="autoChoose">${plan.choose ? '✔ ' : ''}小さな出来事の選択もおまかせにする<small>契約・移籍・結婚・メジャー・引退などの大事な選択では必ず止まります</small></button>
+      ${s.after ? '' : `<button class="choice ${plan.raise ? 'on' : ''} mt" data-act="autoRaise">${plan.raise ? '✔ ' : ''}たまった経験点で自動的に能力アップする<small>ミート・コントロールなど大事な能力から順に</small></button>`}
+    </details>`;
+  };
+
+  const autoSummaryView = (s) => {
+    const r = ui.autoSummary;
+    if (!r) return '';
+    const p = s.player;
+    const range = `${r.from.year}年${G.weekLabel(r.from.year, r.from.week).split('〜')[0]} → ${r.to.year}年${G.weekLabel(r.to.year, r.to.week).split('〜')[0]}`;
+    const stats = [];
+    if (r.bat && r.bat.g) stats.push(`${r.bat.g}試合 ${r.bat.ab}打数${r.bat.h}安打 ${r.bat.hr}本塁打 ${r.bat.rbi}打点`);
+    if (r.pit && r.pit.g) stats.push(`${r.pit.g}登板 ${r.pit.w}勝${r.pit.l}敗${r.pit.s ? `${r.pit.s}S` : ''} ${G.fmtIP(r.pit.outs)}回 ${r.pit.k}奪三振`);
+    if (r.team && r.team.w + r.team.l) stats.push(`チーム ${r.team.w}勝${r.team.l}敗${r.team.d ? `${r.team.d}分` : ''}`);
+    const big = r.events.filter((e) => e.big);
+    const ev = r.events
+      .map((e) => `<details class="auto-ev ${e.big ? 'big' : ''}"><summary>${e.big ? '★ ' : ''}${esc(e.title)}<span class="muted">　${e.y}年${G.weekLabel(e.y, e.w).split('〜')[0]}</span></summary><div class="modal-text">${br(e.text)}</div></details>`)
+      .join('');
+    return `<div class="panel auto-summary">
+      <div class="auto-sum-head"><h3 style="margin:0">⏩ ${r.weeks}週間をおまかせで過ごした</h3><button class="btn sub small" data-act="autoClose">閉じる</button></div>
+      <div class="muted" style="font-size:13px">${range}${r.stop ? `　<b class="neg">「${esc(r.stop)}」で止まりました</b>` : `（${esc(r.target)}）`}</div>
+      <ul class="auto-facts">
+        ${stats.map((x) => `<li>⚾ ${esc(x)}</li>`).join('')}
+        <li>💴 所持金 ${r.money >= 0 ? '+' : ''}${G.fmtMoney(r.money)}（現在 ${G.fmtMoney(p.money)}）</li>
+        ${r.raised ? `<li>💪 能力アップ ${r.raised}回</li>` : ''}
+        ${r.ach ? `<li>🏅 実績解除 ${r.ach}件</li>` : ''}
+        ${big.length ? `<li>★ ${big.map((e) => esc(e.big)).join('・')}</li>` : ''}
+      </ul>
+      ${r.events.length ? `<div class="auto-evs"><div class="muted" style="font-size:12px">この間のお知らせ（${r.events.length}件・押すと読めます）</div>${ev}</div>` : ''}
+    </div>`;
+  };
+
   const afterActionTab = (s) => {
     const p = s.player;
     const works = G.afterWorks(s);
@@ -457,7 +500,7 @@
     const def = G.afterDef(s);
     const a = s.after;
     const next = a.career !== 'business' && a.level + 1 < def.need.length ? `（次の昇進まで経験${Math.max(0, def.need[a.level + 1] - a.xp)}）` : '';
-    return `<div class="panel">
+    return `${autoSummaryView(s)}<div class="panel">
       <div class="section-title"><span class="step">1</span>今週の仕事 <span class="muted">${esc(G.afterRank(s))}${next}</span></div>
       <div class="act-grid">${works.map(workBtn).join('')}</div>
       <div class="section-title"><span class="step">2</span>オフの過ごし方</div>
@@ -465,7 +508,8 @@
       <div class="act-grid">${cur.items.map(privBtn).join('')}</div>
       <div class="week-bar"><div class="week-sum"><span>仕事：<b>${esc(selW.name)}</b></span><span>オフ：<b>${esc(selP.name)}</b>${selP.cost ? `（${G.fmtMoney(selP.cost)}）` : ''}</span></div>
         <button class="btn" data-act="week">この1週間を過ごす ▶</button></div>
-      <div class="act-foot"><span class="muted" style="font-size:13px">${p.age}歳。人生はまだまだ続く。</span><button class="btn sub small" data-act="auto">おまかせで4週進める</button></div>
+      <div class="act-foot"><span class="muted" style="font-size:13px">${p.age}歳。人生はまだまだ続く。</span><button class="btn sub small" data-act="auto">おまかせで4週 ▶</button></div>
+      ${autoPanel(s)}
       ${logView(s)}
     </div>`;
   };
@@ -513,7 +557,7 @@
 
     const selT = train.find((t) => t.id === ui.sel.train);
     const selP = priv.find((a) => a.id === ui.sel.priv);
-    return `<div class="panel">${quick}
+    return `${autoSummaryView(s)}<div class="panel">${quick}
       <div class="section-title"><span class="step">1</span>今週の練習 <span class="muted">練習効率 ×${mul.toFixed(2)}（${phase.name}・${cond.name}）</span></div>
       <div class="act-grid">${train.map(trainBtn).join('')}</div>
       <div class="section-title"><span class="step">2</span>オフの過ごし方</div>
@@ -523,8 +567,8 @@
         <div class="week-sum"><span>練習：<b>${esc(selT.name)}</b></span><span>オフ：<b>${esc(selP.name)}</b>${selP.cost ? `（${G.fmtMoney(selP.cost)}）` : ''}</span></div>
         <button class="btn" data-act="week">この1週間を過ごす ▶</button>
       </div>
-      <div class="act-foot"><span class="muted" style="font-size:13px">${note}</span>
-        <button class="btn sub small" data-act="auto">おまかせで4週進める</button></div>
+      <div class="act-foot"><span class="muted" style="font-size:13px">${note}</span><button class="btn sub small" data-act="auto">おまかせで4週 ▶</button></div>
+      ${autoPanel(s)}
       ${lastGamesView(s)}
       ${gameSettings(s)}
       ${logView(s)}
@@ -857,7 +901,7 @@
   // 大きな買い物・投資
   const investPanel = (s) => {
     const p = s.player;
-    const list = G.investList(s).filter((x) => !s.after || x.group === 'future');
+    const list = G.investList(s).filter((x) => !s.after || ['future', 'legacy'].includes(x.group));
     const groups = G.INVEST_GROUPS.map((g) => {
       const items = list.filter((x) => x.group === g.id);
       if (!items.length) return '';
@@ -866,13 +910,15 @@
           const lv = G.invLv(s, inv.id);
           const next = inv.levels[lv];
           const steps = inv.levels.length > 1 ? `<span class="inv-steps">${inv.levels.map((_, i) => `<i class="${i < lv ? 'on' : ''}"></i>`).join('')}</span>` : '';
-          const owned = lv ? `<small class="inv-owned">所有：${esc(inv.levels[lv - 1].name)}</small>` : '';
+          const lvName = (x) => (G.investLevelName ? G.investLevelName(s, x) : x.name);
+          const owned = lv ? `<small class="inv-owned">${inv.id === 'donate' ? `寄付${lv}回` : `所有：${esc(lvName(inv.levels[lv - 1]))}`}</small>` : '';
           if (!next)
             return `<div class="shop-item inv done"><b>${esc(G.investName(inv, p))} ${steps}</b>${owned}<div class="act-foot"><span class="muted">すべて購入済み</span></div></div>`;
-          return `<div class="shop-item inv"><b>${esc(G.investName(inv, p))} ${steps}</b>${owned}
-            <small>${lv ? '次：' : ''}${esc(next.name)}</small><small class="muted">${esc(next.desc)}</small>
+          const why = inv.req ? inv.req(s) : '';
+          return `<div class="shop-item inv ${inv.group === 'legacy' ? 'legacy' : ''}"><b>${esc(G.investName(inv, p))} ${steps}</b>${owned}
+            <small>${lv ? '次：' : ''}${esc(lvName(next))}</small><small class="muted">${esc(next.desc)}</small>${why ? `<small class="why">${esc(why)}</small>` : ''}
             <div class="act-foot"><span class="price">${G.fmtMoney(next.price)}</span>
-            <button class="btn small" data-act="invest" data-arg="${inv.id}" ${p.money >= next.price ? '' : 'disabled'}>購入</button></div></div>`;
+            <button class="btn small" data-act="invest" data-arg="${inv.id}" ${p.money >= next.price && !why ? '' : 'disabled'}>購入</button></div></div>`;
         })
         .join('')}</div>`;
     }).join('');
@@ -1284,6 +1330,9 @@
         <div class="legend">${esc(e.title)}</div>
         <div class="badges">${e.meikyu ? '<span>🏅 名球会入り</span>' : ''}${e.hall ? '<span>🏛 野球殿堂入り</span>' : ''}</div>
       </div>
+      ${e.honors && e.honors.length ? `<div class="panel honors"><h3>栄誉の記録</h3><div class="honor-grid">${e.honors
+        .map(([icon, name, sub]) => `<div class="honor"><div class="honor-icon">${icon}</div><div><b>${esc(name)}</b>${sub ? `<small class="muted">${esc(sub)}</small>` : ''}</div></div>`)
+        .join('')}</div></div>` : ''}
       ${e.life ? `<div class="panel life-score"><div><small class="muted">人生の評価</small><div class="ls-label">${esc(e.life.label)}</div></div>
         <div class="ls-num">${e.life.score}<small>点</small></div><div class="muted" style="font-size:13px">平均充実度 ${e.life.avgHappy}・${esc(closePeople(s))}</div></div>` : ''}
       <div class="grid2">
@@ -1447,6 +1496,7 @@
     },
     week: () => {
       if (ui.s.queue.length) return;
+      ui.autoSummary = null;
       if (ui.s.after) {
         G.doAfterWeek(ui.s, ui.sel.work, ui.sel.priv);
         afterTurn();
@@ -1456,33 +1506,44 @@
       G.doAction(ui.s, ui.sel.train, ui.sel.priv);
       afterTurn();
     },
-    auto: () => {
+    autoGo: (arg) => {
       const s = ui.s;
-      if (s.after) {
-        for (let i = 0; i < 4 && !s.queue.length && !s.ended; i++) {
-          const w = G.afterWorks(s).filter((x) => x.ok);
-          G.doAfterWeek(s, G.pick(w).id, 'relax');
-        }
-        afterTurn();
-        return;
-      }
-      const prevMode = s.flags.gameMode;
-      s.flags.gameMode = 'auto';
-      for (let i = 0; i < 4; i++) {
-        if (s.queue.length || s.ended || s.retired || s.gw) break;
-        const p = s.player;
-        const train = G.trainingOptions(s);
-        let id;
-        if (p.stamina < 45) id = 'rest';
-        else {
-          const t = train.filter((a) => !a.risky && !a.rest);
-          id = t.length ? G.pick(t).id : 'rest';
-        }
-        G.doAction(s, id, 'relax');
-      }
-      s.flags.gameMode = prevMode;
+      if (s.queue.length || s.gw) return;
+      if (!s.after) syncSelection(s);
+      ui.autoSummary = G.autoAdvance(s, arg);
+      ui.autoOpen = false;
       afterTurn();
+      window.scrollTo(0, 0);
     },
+    autoClose: () => {
+      ui.autoSummary = null;
+      render();
+    },
+    autoOpen: () => {
+      ui.autoOpen = !ui.autoOpen;
+    },
+    autoPlan: (arg) => {
+      const [k, v] = arg.split(':');
+      G.autoPlan(ui.s)[k] = v;
+      ui.autoOpen = true;
+      save();
+      render();
+    },
+    autoChoose: () => {
+      const plan = G.autoPlan(ui.s);
+      plan.choose = !plan.choose;
+      ui.autoOpen = true;
+      save();
+      render();
+    },
+    autoRaise: () => {
+      const plan = G.autoPlan(ui.s);
+      plan.raise = !plan.raise;
+      ui.autoOpen = true;
+      save();
+      render();
+    },
+    auto: () => handlers.autoGo('w4'),
     approach: (arg) => {
       if (!ui.s.gw || ui.s.queue.length) return;
       G.stepGames(ui.s, arg);
@@ -1596,7 +1657,7 @@
       const next = inv && inv.levels[G.invLv(s, arg)];
       if (!next) return;
       ui.confirm = {
-        text: `${next.name}を${G.fmtMoney(next.price)}で購入しますか？\n（${next.desc}）`,
+        text: `${G.investLevelName(s, next)}（${G.fmtMoney(next.price)}）を購入しますか？\n（${next.desc}）`,
         yes: '購入する',
         run: () => {
           const msg = G.buyInvestment(s, arg);

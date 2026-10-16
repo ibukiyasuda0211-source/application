@@ -1944,3 +1944,83 @@ h3 {
 .pa-list li.clutch-pa {
   font-weight: 800;
 }
+
+/* ---------- おまかせ進行 ---------- */
+.auto-panel summary {
+  font-weight: 800;
+}
+.auto-targets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 6px;
+}
+.auto-summary {
+  border: 2px solid var(--blue);
+}
+.auto-sum-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.auto-facts {
+  margin: 8px 0;
+  padding-left: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+  font-size: 14px;
+}
+.auto-evs {
+  display: grid;
+  gap: 4px;
+}
+.auto-ev {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 14px;
+}
+.auto-ev.big {
+  border-color: var(--gold);
+  background: #fffaf0;
+}
+.auto-ev summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.auto-ev .modal-text {
+  font-size: 13px;
+  margin: 6px 0;
+}
+
+/* ---------- 終盤の買い物・栄誉 ---------- */
+.shop-item.inv.legacy {
+  border-color: #d9c38a;
+  background: linear-gradient(180deg, #fffaf0, #fff);
+}
+.honors h3 {
+  margin-top: 0;
+}
+.honor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+}
+.honor {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  border: 2px solid #f2d48a;
+  border-radius: 12px;
+  padding: 8px 12px;
+  background: #fffaf0;
+}
+.honor-icon {
+  font-size: 26px;
+}
+.honor b {
+  display: block;
+}

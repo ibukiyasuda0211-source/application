@@ -240,6 +240,11 @@
       run: (s) => G.startPositionConsult(s),
     },
     {
+      id: 'traderequest', place: 'people', name: '球団にトレードを志願する', desc: '出場機会を求めて移籍を願い出る（首脳陣の評価が下がる）',
+      req: (s) => G.canRequestTrade(s),
+      run: (s) => G.requestTrade(s),
+    },
+    {
       id: 'stylecons', place: 'people', name: 'コーチにモデルチェンジを相談', desc: 'ベテランとしてのプレースタイルを見直す',
       req: (s) => G.canConsultStyle(s),
       run: (s) => G.startStyleConsult(s),
