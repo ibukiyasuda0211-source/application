@@ -24,7 +24,7 @@
 
   // 人生を左右する選択は、おまかせ中でも必ず止まって自分で選ぶ
   const STOP_KINDS = ['contract', 'release', 'fa', 'forced_retire'];
-  const STOP_LIFE = ['second_career', 'continue_choice', 'life_end', 'birth', 'wedding', 'mlb_offer', 'mlb_release', 'npb_return', 'intl_select', 'style_change', 'pos_offer', 'pos_request', 'fa_declare', 'trade', 'owner_plan', 'hall_speech', 'chain_academy'];
+  const STOP_LIFE = ['second_career', 'continue_choice', 'life_end', 'birth', 'wedding', 'mlb_offer', 'mlb_release', 'npb_return', 'intl_select', 'jp_series_select', 'style_change', 'pos_offer', 'pos_request', 'fa_declare', 'trade', 'owner_plan', 'hall_speech', 'chain_academy'];
   G.isBigChoice = (q) => STOP_KINDS.includes(q.kind) || (q.kind === 'life' && STOP_LIFE.includes(q.id));
   const AVOID = /飲んでみる|開き直る|我慢して|言い張る|言い返す|断る|貸す/;
 
@@ -48,7 +48,7 @@
     const limit = { smart: 45, hard: 32, easy: 62 }[plan.train];
     if (p.stamina < limit) return 'rest';
     if (has('vetcare') && G.chance(plan.train === 'hard' ? 0.25 : 0.5)) return 'vetcare';
-    if (plan.train === 'hard' && p.stamina >= 75 && G.chance(0.35)) return 'special';
+    if (plan.train === 'hard' && has('special') && p.stamina >= 75 && G.chance(0.35)) return 'special';
     const pool = opts.filter((o) => !o.rest && !o.risky && o.id !== 'vetcare').map((o) => o.id);
     // 弱いところを重点的に
     if (G.isPitcher(p)) {

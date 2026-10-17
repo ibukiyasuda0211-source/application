@@ -168,11 +168,12 @@
     } else {
       for (const t of G.TRAININGS) {
         if (t.minAge && p.age < t.minAge) continue;
-        if (t.for === 'A' || (t.for === 'P') === pitcher) acts.push({ id: t.id, name: t.name, desc: t.desc, risky: t.risky });
+        if (t.cond && !t.cond(s)) continue;
+        if (t.for === 'A' || (t.for === 'P') === pitcher) acts.push({ id: t.id, name: t.name, desc: t.desc, risky: t.risky, japan: t.japan });
       }
     }
     acts.push({ id: 'rest', name: '完全休養', desc: '練習を休んで体力回復', rest: true });
-    return acts;
+    return G.filter('trainingOptions', acts, s);
   };
 
   G.trainingMultiplier = (s) => {
@@ -230,7 +231,7 @@
       scene(s, 'ケガ', `練習中に${inj.name}をしてしまった…\n全治${inj.weeks}週の見込み。しばらくは治療に専念しよう。`);
     }
     if (G.phaseOf(s.week, s.year).id !== 'season') p.trust = G.clamp(p.trust + 0.6, 0, 100);
-    return msg;
+    return G.filter('trainingDone', msg, s, t);
   };
 
   // 1週間 = 練習ひとつ + オフの過ごし方ひとつ
@@ -278,7 +279,7 @@
     const ov = G.overall(p);
 
     if (phase !== 'season') s.lastGames = null;
-    if (phase === 'open') {
+    if (phase === 'open' && !G.blocked('openGames', s)) {
       const r = G.simOpenGames(s, 4);
       G.addStats(s.open.bat, r.bat);
       G.addStats(s.open.pit, r.pit);
@@ -457,7 +458,9 @@
       log(s, `春季キャンプ ${first ? '1軍' : '2軍'}スタート`, 'event');
     }
     if (w === c.openW - 1) {
-      scene(s, 'オープン戦開幕', `キャンプを打ち上げ、オープン戦が始まる。\n${G.fmtDate(c.opening)}の開幕戦までに、開幕1軍を勝ち取れ！`);
+      // 日本代表などでチームを離れているときは、チームの様子だけ伝わる
+      if (G.blocked('openGames', s)) log(s, `チームはキャンプを打ち上げ、オープン戦に入った（${G.fmtDate(c.opening)}に開幕）`, 'event');
+      else scene(s, 'オープン戦開幕', `キャンプを打ち上げ、オープン戦が始まる。\n${G.fmtDate(c.opening)}の開幕戦までに、開幕1軍を勝ち取れ！`);
     }
     if (w === c.startW - 1) {
       // 開幕1軍の選考：能力・キャンプでの評価・オープン戦の結果・同じ守備位置のライバル

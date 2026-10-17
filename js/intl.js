@@ -8,11 +8,15 @@
   const DAY = 86400000;
   const addDays = (d, n) => new Date(d.getTime() + n * DAY);
   // 1次ラウンドは3月5日以降の最初の木曜から4試合。準々決勝はその6日後、準決勝・決勝はさらに5〜6日後
+  // その前に、1月下旬のメンバー発表 → 2月中旬からの宮崎合宿（最後に壮行試合）→ 3月初めの強化試合
   G.intlDates = (year) => {
     const mar5 = new Date(Date.UTC(year, 2, 5));
     const pool = addDays(mar5, (4 - mar5.getUTCDay() + 7) % 7);
     const d = {
-      announce: addDays(pool, -24),
+      announce: addDays(pool, -42),
+      camp: addDays(pool, -22),
+      sendoff: addDays(pool, -11),
+      exhibit: addDays(pool, -6),
       pool,
       qf: addDays(pool, 6),
       sf: addDays(pool, 11),
@@ -39,13 +43,14 @@
     if (!last) return null;
     const ov = G.overall(p);
     const titles = (last.titles || []).filter((t) => !['メジャー挑戦'].includes(t)).length;
-    const score = last.war * 1.2 + titles * 1.5 + Math.max(0, p.popularity - 50) * 0.04 + Math.max(0, ov - 60) * 0.12;
+    const score = last.war * 1.2 + titles * 1.5 + Math.max(0, p.popularity - 50) * 0.04 + Math.max(0, ov - 60) * 0.12 + (G.jpSelectBonus ? G.jpSelectBonus(s) : 0);
     if (score < 3.6) return null;
     let role;
     if (G.isPitcher(p)) role = p.role === 'SP' ? 'SP' : p.role === 'CL' && score >= 6 ? 'CL' : 'RP';
     else role = score >= 8 ? 'cleanup' : score >= 5.2 ? 'starter' : 'bench';
     return { role, score };
   };
+  G.intlSelection = selection;
 
   const ROLE_NAME = { SP: '先発投手', RP: '中継ぎ', CL: '抑え', cleanup: '4番打者', starter: 'スタメン', bench: '控え野手' };
 
@@ -79,6 +84,8 @@
       }
     }
     const win = G.chance(pWin);
+    g.win = win;
+    g.hero = G.jpHero ? G.jpHero(s, g) : '';
     let ours;
     let theirs;
     if (g.line && G.isPitcher(p)) {
@@ -101,7 +108,7 @@
   };
 
   const lineText = (p, g) => (!g.line ? '出場なし' : G.isPitcher(p) ? G.pitLineText(g.line) : G.batLineText(g.line));
-  const gameText = (s, g) => `vs ${g.opp}　${g.win ? '○' : '●'} ${g.score[0]}-${g.score[1]}｜${lineText(s.player, g)}`;
+  const gameText = (s, g) => `vs ${g.opp}　${g.win ? '○' : '●'} ${g.score[0]}-${g.score[1]}｜${lineText(s.player, g)}${g.hero ? `\n　${g.hero}` : ''}`;
 
   const total = (s, t) => {
     const acc = G.isPitcher(s.player) ? G.emptyPit() : G.emptyBat();
@@ -116,6 +123,7 @@
     t.text = G.isPitcher(p) ? G.pitLineText(tot) : G.batLineText(tot);
     s.intlHist = s.intlHist || [];
     s.intlHist.push({ year: s.year, role: t.role, result, text: t.text, mvp: !!t.mvp, hr: tot.hr || 0, w: tot.w || 0, s: tot.s || 0 });
+    G.emit('intl:finish', s, t, result);
     s.intl = null;
   };
 
@@ -141,7 +149,10 @@
     }
     t.games.push(...games);
     p.stamina = G.clamp(p.stamina - 8 * games.length * (G.isPitcher(p) ? 1.2 : 0.6), 0, 100);
-    const lines = games.map((g) => gameText(s, g)).join('\n');
+    let lines = games.map((g) => gameText(s, g)).join('\n');
+    // 決勝の前に、監督の言葉
+    const speech = stage === 2 && games[1] ? G.filter('intlFinalSpeech', '', s) : '';
+    if (speech) lines = `${gameText(s, games[0])}\n\n${speech}\n\n${gameText(s, games[1])}`;
     const head = ['1次ラウンド（東京ラウンド）', '準々決勝', '準決勝・決勝（アメリカ・マイアミ）'][stage];
     if (stage === 0) {
       const wins = games.filter((g) => g.win).length;
@@ -201,17 +212,26 @@
     if (w === d.announceW - 1) {
       const sel = selection(s);
       if (sel) {
-        s.intl = { year: s.year, role: sel.role, accepted: false, games: [] };
+        s.intl = { type: 'wbc', year: s.year, role: sel.role, accepted: false, games: [], score: sel.score };
+        G.emit('intl:selected', s, s.intl);
         s.queue.push({
           kind: 'life',
           id: 'intl_select',
           title: '日本代表に選出！',
-          text: `${G.fmtDate(d.announce)}、${G.INTL_NAME}の日本代表メンバーが発表された。\n\n「${s.player.name}」——${ROLE_NAME[sel.role]}として名前が呼ばれた！\n\n${G.fmtDate(d.pool)}から東京で1次ラウンド、決勝は${G.fmtDate(d.final)}にアメリカで行われる。`,
+          text: `${G.fmtDate(d.announce)}、${G.INTL_NAME}の日本代表メンバーが発表された。\n\n「${s.player.name}」——${ROLE_NAME[sel.role]}として名前が呼ばれた！\n\n${G.jpSelectText ? `${G.jpSelectText(s, s.intl)}\n\n` : ''}${G.fmtDate(d.camp)}から宮崎合宿、3月初めに強化試合。${G.fmtDate(d.pool)}から東京で1次ラウンド、決勝は${G.fmtDate(d.final)}にアメリカで行われる。`,
           data: {},
         });
       } else G.log(s, `${G.INTL_NAME}の日本代表メンバーが発表された。今回は選ばれなかった…。`, 'event', 'event');
     }
-    if (s.intl && s.intl.accepted) {
+    // 実績のある選手には、発表の前に監督から電話がくる
+    if (w === d.announceW - 3 && !s.intl && s.japan && s.japan.staff) {
+      const sel = selection(s);
+      if (sel && sel.score >= 7) {
+        s.flags.jpCall = s.year;
+        G.scene(s, '代表監督からの電話', `知らない番号から電話がかかってきた。\n\n「侍ジャパン監督の${s.japan.staff.manager.name}です。今度の${G.INTL_NAME}、力を貸してほしい」\n\n正式な発表はまだ先だが、心は決まっていた。`);
+      }
+    }
+    if (s.intl && s.intl.accepted && s.intl.type !== 'series') {
       if (w === d.poolW) runStage(s, 0);
       else if (w === d.qfW && s.intl) runStage(s, 1);
       else if (w === d.finalW && s.intl) runStage(s, 2);
@@ -224,6 +244,7 @@
         label: '日の丸を背負って戦う！',
         run: (s2) => {
           s2.intl.accepted = true;
+          G.emit('intl:accepted', s2, s2.intl);
           s2.flags.japanCount = (s2.flags.japanCount || 0) + 1;
           s2.history.push({ year: s2.year, text: `${G.INTL_NAME}の日本代表に選出` });
           G.buzz(s2, 'japan');
@@ -247,12 +268,24 @@
     const mine = (s.intlHist || []).find((x) => x.year === year);
     const out = [
       [d.announce, 'season', '🇯🇵 日本代表メンバー発表'],
+      [d.camp, 'season', '🇯🇵 侍ジャパン宮崎合宿（〜10日間）'],
+      [d.sendoff, 'season', '🇯🇵 壮行試合（宮崎）'],
+      [d.exhibit, 'season', '🇯🇵 強化試合（名古屋・大阪）'],
       [d.pool, 'big', `🌏 ${G.INTL_NAME} 1次ラウンド開幕`],
       [d.qf, 'season', '🌏 準々決勝'],
       [d.sf, 'season', '🌏 準決勝'],
       [d.final, 'big', `🌏 ${G.INTL_NAME} 決勝`],
     ];
     if (mine) out.push([d.final, 'achv', `🇯🇵 日本代表：${mine.result}`]);
+    return out;
+  };
+  G.seriesEvents = (s, year) => {
+    if (!G.isIntlYear(year + 1) || !G.seriesWeek) return [];
+    const w = G.seriesWeek(year);
+    const sat = new Date(G.week1Monday(year).getTime() + ((w - 1) * 7 + 5) * DAY);
+    const out = [[G.ymd(sat), 'season', `🇯🇵 ${G.JP_SERIES_NAME}（強化試合）`]];
+    const mine = (s.intlHist || []).find((x) => x.year === year && x.type === 'series');
+    if (mine) out.push([G.ymd(sat), 'achv', `🇯🇵 ${G.JP_SERIES_NAME}：${mine.result}`]);
     return out;
   };
 })();

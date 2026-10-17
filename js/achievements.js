@@ -301,6 +301,16 @@
   A('japan', 'win', '世界の舞台で勝利', '国際大会で勝利投手になった', (c) => intl(c).some((h) => h.w > 0), PIT);
   A('japan', 'save', '世界の守護神', '国際大会でセーブを挙げた', (c) => intl(c).some((h) => h.s > 0), PIT);
   A('japan', 'champ2', '連覇', '国際大会で2度の世界一', (c) => intl(c).filter((h) => h.result === '優勝').length >= 2, { hidden: true });
+  A('japan', 'series', '侍のユニフォーム', '11月の侍ジャパンシリーズに招集された', (c) => (c.s.flags.seriesCount || 0) >= 1);
+  A('japan', 'call', '指揮官からの電話', 'メンバー発表の前に、代表監督から直接電話がきた', (c) => !!c.s.flags.jpCall);
+  A('japan', 'jpfriend', '日の丸の絆', '代表の合宿で、他球団の選手と打ち解けた', (c) => (c.s.flags.jpFriendsMade || 0) >= 1);
+  A('japan', 'jpfriend3', '侍の輪', '代表で3人以上の仲間ができた', (c) => (c.s.flags.jpFriendsMade || 0) >= 3);
+  A('japan', 'trust80', '指揮官の信頼', '代表の首脳陣の評価が80を超えた', (c) => (c.s.flags.jpEvalMax || 0) >= 80);
+  A('japan', 'promote', '実力で勝ち取った', '合宿と強化試合の働きで、本番の役割が上がった', (c) => (c.s.flags.jpPromoted || 0) >= 1);
+  A('japan', 'mlbtalk', '海の向こうの話', '代表のメジャー組から、メジャーの話を聞いた', (c) => (c.s.flags.mlbAdvice || 0) >= 1);
+  A('japan', 'cleanup', '侍の4番', '本大会で日本代表の4番を任された', (c) => intl(c).some((h) => h.type !== 'series' && h.role === 'cleanup'), BAT);
+  A('japan', 'closer', '侍の守護神', '本大会で日本代表の抑えを任された', (c) => intl(c).some((h) => h.type !== 'series' && h.role === 'CL'), PIT);
+  A('japan', 'jpjt', '垣根を越えて', '代表で知り合った仲間と合同自主トレをした', (c) => (c.s.story.jpJointTrain || 0) >= 1);
 
   // ===== 試練 =====
   A('hard', 'injury', '初めてのケガ', '体は資本', (c) => !!c.p.injury || c.buzz('injury') > 0, { bitter: true });

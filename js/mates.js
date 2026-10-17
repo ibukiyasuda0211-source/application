@@ -49,6 +49,8 @@
   // 話しかけられるか（理由の文字列。できるなら ''）
   G.canTalk = (s, m, topicId) => {
     if (s.retired || s.after) return '現役のときだけ';
+    const away = G.filter('canTalkMate', '', s, m);
+    if (away) return away;
     const t = G.TALK_TOPICS.find((x) => x.id === topicId);
     const w = G.absWeek(s);
     const used = s.flags.talkW === w ? s.flags.talkN || 0 : 0;

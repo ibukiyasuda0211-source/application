@@ -2454,3 +2454,161 @@ h3 {
   color: #c0392b;
   font-weight: bold;
 }
+
+/* ---------- 侍ジャパン ---------- */
+.jp-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 8px 0 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #10275c, #1f4aa8);
+  color: #fff;
+}
+.jp-banner small {
+  display: block;
+  font-size: 12px;
+  opacity: 0.85;
+  margin-top: 2px;
+}
+.jp-banner .btn {
+  flex-shrink: 0;
+}
+.jp-head {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.jp-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.jp-title b {
+  font-size: 18px;
+}
+.jp-title small {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+}
+.jp-flag {
+  font-size: 28px;
+  line-height: 1;
+}
+.jp-sched {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 6px;
+}
+.jp-sched li {
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-size: 13px;
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+.jp-sched li b {
+  color: var(--blue);
+}
+.jp-sched li.done {
+  opacity: 0.5;
+}
+.jp-sched li.now {
+  border-color: var(--blue);
+  background: #eef4ff;
+  font-weight: bold;
+}
+.jp-me {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: #f4f7ff;
+  border: 1.5px solid #c9d8f5;
+}
+.jp-me .num {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: #10275c;
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 20px;
+}
+.jp-me .grow {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.jp-me .bar.aff {
+  grid-template-columns: 84px 1fr 30px;
+  font-size: 12px;
+}
+.jp-note {
+  font-size: 13px;
+  margin: 0;
+}
+.jp-staff {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+.jp-card {
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: var(--panel);
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  cursor: pointer;
+  min-width: 0;
+}
+.jp-card:not(:disabled):hover {
+  border-color: var(--blue);
+}
+.jp-card:disabled {
+  cursor: default;
+}
+.jp-card small {
+  font-size: 12px;
+}
+.jp-card .bar.aff {
+  display: grid;
+  grid-template-columns: 1fr 26px;
+  gap: 6px;
+  align-items: center;
+  font-size: 12px;
+  margin-top: 4px;
+}
+.jp-card .track {
+  display: block;
+}
+.jp-card .fill {
+  display: block;
+}
+.tag.mlb {
+  background: #e7efff;
+  color: #1f4aa8;
+}
+.mate-head .num.jp {
+  background: #10275c;
+  font-size: 14px;
+}

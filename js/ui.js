@@ -221,15 +221,16 @@
     { id: 'calendar', name: 'カレンダー' },
     { id: 'ach', name: '実績' },
     { id: 'people', name: '人間関係' },
+    { id: 'japan', name: '侍ジャパン' },
     { id: 'life', name: '人生' },
     { id: 'shop', name: 'ショップ' },
   ];
 
   const tabsView = (s) =>
-    `<div class="tabs">${TABS.filter((t) => !(s.after && t.id === 'upgrade')).map(
+    `<div class="tabs">${TABS.filter((t) => !(s.after && t.id === 'upgrade') && !(t.id === 'japan' && !G.jpTabVisible(s))).map(
       (t) =>
         `<button class="tab ${ui.tab === t.id ? 'on' : ''}" data-act="tab" data-arg="${t.id}">${t.name}${
-          (t.id === 'upgrade' && canUpgradeSomething(s.player)) || (t.id === 'ach' && s.achBadge) ? '<span class="dot"></span>' : ''
+          (t.id === 'upgrade' && canUpgradeSomething(s.player)) || (t.id === 'ach' && s.achBadge) || (t.id === 'japan' && G.onJapanDuty(s)) ? '<span class="dot"></span>' : ''
         }</button>`,
     ).join('')}</div>`;
 
@@ -574,7 +575,11 @@
 
     const selT = train.find((t) => t.id === ui.sel.train);
     const selP = priv.find((a) => a.id === ui.sel.priv);
-    return `${autoSummaryView(s)}<div class="panel">${quick}
+    const jp = G.onJapanDuty(s) ? G.jpPhase(s) : null;
+    const jpBanner = jp
+      ? `<div class="jp-banner"><div><b>🇯🇵 侍ジャパン ${esc(jp.name)}</b><small>${esc(jp.place)}で代表の活動中。練習は代表メニュー、仲間や首脳陣と話せるのは「侍ジャパン」タブ</small></div><button class="btn small" data-act="tab" data-arg="japan">侍ジャパンへ</button></div>`
+      : '';
+    return `${autoSummaryView(s)}<div class="panel">${quick}${jpBanner}
       <div class="section-title"><span class="step">1</span>今週の練習 <span class="muted">練習効率 ×${mul.toFixed(2)}（${phase.name}・${cond.name}）</span></div>
       <div class="act-grid">${train.map(trainBtn).join('')}</div>
       <div class="section-title"><span class="step">2</span>オフの過ごし方</div>
@@ -826,10 +831,10 @@
     let next = s.year;
     while (!G.isIntlYear(next) || (next === s.year && s.week > G.intlDates(next).finalW)) next++;
     const rows = hist
-      .map((h) => `<tr><td>${h.year}</td><td>${esc(h.result)}${h.mvp ? '・MVP' : ''}</td><td style="text-align:left">${esc(h.text)}</td></tr>`)
+      .map((h) => `<tr><td>${h.year}</td><td>${h.type === 'series' ? '強化試合' : '本大会'}</td><td>${esc(h.result)}${h.mvp ? '・MVP' : ''}</td><td style="text-align:left">${esc(h.text)}</td></tr>`)
       .join('');
     return `<h3 class="mt">日本代表 <span class="muted" style="font-size:12px">次の${G.INTL_NAME}は${next}年3月（前年の活躍で選ばれる）</span></h3>
-      ${hist.length ? `<div class="tbl-wrap"><table class="stats"><tr><th>年</th><th>成績</th><th>個人成績</th></tr>${rows}</table></div>` : '<p class="muted" style="font-size:13px">まだ代表に選ばれたことはない。</p>'}`;
+      ${hist.length ? `<div class="tbl-wrap"><table class="stats"><tr><th>年</th><th>大会</th><th>成績</th><th>個人成績</th></tr>${rows}</table></div>` : '<p class="muted" style="font-size:13px">まだ代表に選ばれたことはない。</p>'}`;
   };
 
   const raceView = (s) => {
@@ -1118,6 +1123,137 @@
     return `<div class="track"><div class="fill" style="width:${v}%;background:${color}"></div></div>`;
   };
 
+  // ---------- 侍ジャパン ----------
+  const JP_ROLE_NAME = { SP: '先発', RP: '中継ぎ', CL: '抑え', cleanup: '4番', starter: 'スタメン', bench: '控え' };
+  const mdOf = (ymd) => {
+    const [, m, d] = ymd.split('-');
+    return `${Number(m)}/${Number(d)}`;
+  };
+  const jpTags = (s, x) => {
+    const t = s.intl;
+    return (
+      (x.pid === 'rival' ? '<span class="tag friend">同期のライバル</span>' : '') +
+      (x.rosterId !== undefined ? '<span class="tag friend">チームメイト</span>' : '') +
+      (G.jpIsFriend(s, x) && !x.pid && x.rosterId === undefined ? '<span class="tag lover">仲間</span>' : '') +
+      (x.mlb && t && t.type !== 'series' && !t.mlbJoined ? '<span class="tag mlb">合流前</span>' : '')
+    );
+  };
+  const japanTab = (s) => {
+    const p = s.player;
+    const J = s.japan;
+    const t = s.intl && s.intl.squad ? s.intl : null;
+    const style = J && J.staff ? G.jpStyle(s) : null;
+    let head = '';
+    if (t) {
+      const ph = G.jpPhase(s);
+      const title = t.type === 'series' ? `${G.JP_SERIES_NAME} ${t.year}` : `${G.INTL_NAME} ${t.year}`;
+      let sched = '';
+      if (t.type !== 'series') {
+        const d = G.intlDates(t.year);
+        const items = [
+          [d.camp, d.campW, '宮崎合宿'],
+          [d.sendoff, d.exhibitW - 1, '壮行試合・メジャー組合流'],
+          [d.exhibit, d.exhibitW, '強化試合（本番の役割が決まる）'],
+          [d.pool, d.poolW, '1次ラウンド（東京）'],
+          [d.qf, d.qfW, '準々決勝（東京）'],
+          [d.sf, d.sfW, '準決勝・決勝（マイアミ）'],
+        ];
+        sched = `<ol class="jp-sched">${items
+          .map(([date, w, name]) => `<li class="${s.year === t.year && s.week > w ? 'done' : s.year === t.year && s.week === w ? 'now' : ''}"><b>${mdOf(date)}</b>${name}</li>`)
+          .join('')}</ol>`;
+      }
+      const status = !t.accepted ? '選出されました（返事を待っています）' : G.onJapanDuty(s) ? `いま：${ph.name}（${ph.place}）` : ph && ph.id === 'wait' ? `合宿は${mdOf(G.intlDates(t.year).camp)}から` : '';
+      const w = G.absWeek(s);
+      const left = G.JP_TALKS_PER_WEEK - (t.talkW === w ? t.talkN || 0 : 0);
+      const ev = Math.round(t.eval);
+      head = `<div class="jp-head">
+        <div class="jp-title"><span class="jp-flag">🇯🇵</span><div><b>${esc(title)}</b><small>${esc(status)}</small></div></div>
+        ${sched}
+        <div class="jp-me"><div class="num">${t.number}</div><div class="grow"><b>${esc(p.name)}（あなた）</b><small>役割：${JP_ROLE_NAME[t.role]}${t.roleSet ? '（本番）' : '（予定）'}</small>
+          <div class="bar aff"><span>首脳陣の評価</span><div class="track"><div class="fill" style="width:${ev}%;background:var(--blue)"></div></div><span class="val">${ev}</span></div>
+          <small class="muted">${G.jpEvalLabel(ev)}。${style ? `監督は「${style.name}」：${style.desc}` : ''}</small></div></div>
+        ${G.onJapanDuty(s) ? `<p class="muted jp-note">選手の名前や首脳陣を押すと話しかけられる。仲間とは今週あと<b>${left}</b>回（週${G.JP_TALKS_PER_WEEK}回まで）、首脳陣はそれぞれ週1回。仲${G.FRIEND_AFF}で人間関係に加わる（代表の仲間は${G.jpFriendCap(s)}人まで、いま${G.jpFriends(s).length}人）。</p>` : ''}
+      </div>`;
+    } else {
+      let next = s.year;
+      while (!G.isIntlYear(next) || (next === s.year && s.week > G.intlDates(next).finalW)) next++;
+      head = `<div class="jp-head"><div class="jp-title"><span class="jp-flag">🇯🇵</span><div><b>侍ジャパン</b><small>次の${G.INTL_NAME}は${next}年3月。前の年の活躍で選ばれる${G.isIntlYear(s.year + 1) ? `（今年の11月には${G.JP_SERIES_NAME}も）` : ''}</small></div></div>
+        ${J && J.trust !== null && J.trust !== undefined ? `<p class="muted jp-note">${esc(J.staff.manager.name)}監督からの評価：${G.jpEvalLabel(J.trust)}（同じ監督のあいだは選考に響く）</p>` : ''}</div>`;
+    }
+    const staffHtml = J && J.staff
+      ? `<h3 class="mt">首脳陣</h3><div class="jp-staff">${G.jpStaffList(s)
+          .map(
+            (st) => `<button class="jp-card" data-act="jpStaff" data-arg="${st.key}" ${t ? '' : 'disabled'}><b>${esc(st.name)}</b><small>${esc(st.role)}${st.key === 'manager' ? `・${esc(G.jpStyle(s).name)}` : ''}</small><small class="muted">${esc(st.bio)}</small>
+              <span class="bar aff"><span class="track"><span class="fill" style="width:${Math.min(100, st.aff || 0)}%;background:#3b8ee0"></span></span><span class="val">${Math.round(st.aff || 0)}</span></span></button>`,
+          )
+          .join('')}</div>`
+      : '';
+    let squadHtml = '';
+    if (t) {
+      const sq = G.jpSquad(s);
+      const me = (grp) => G.JP_POS_GROUPS.find((g) => g.id === grp).pos.includes(p.position);
+      squadHtml = G.JP_POS_GROUPS.map((grp) => {
+        const list = sq.filter((x) => grp.pos.includes(x.pos)).sort((a, b) => (a.prole || '').localeCompare(b.prole || '') || b.rating - a.rating);
+        const rows = list
+          .map(
+            (x) => `<tr><td style="text-align:left"><button class="name-link" data-act="jpMember" data-arg="${x.id}">${esc(x.name)}</button> ${jpTags(s, x)}</td><td>${esc(G.jpTeamName(x, false))}</td><td>${esc(G.jpPosName(x))}</td><td>${x.age}</td><td>${rankBadge(x.rating)}</td><td>${(x.caps || 0) + 1}回目</td><td>${Math.round(G.jpAff(s, x))}</td></tr>`,
+          )
+          .join('');
+        const meRow = me(grp.id) ? `<tr class="me"><td style="text-align:left">${esc(p.name)}（あなた）</td><td>${esc(G.teamById(p.teamId).short)}</td><td>${JP_ROLE_NAME[t.role]}</td><td>${p.age}</td><td>${rankBadge(Math.round(G.overall(p)))}</td><td>${(s.flags.japanCount || 0) + (s.flags.seriesCount || 0) + (t.accepted ? 0 : 1)}回目</td><td>-</td></tr>` : '';
+        return `<h3 class="mt">${grp.name}（${list.length + (me(grp.id) ? 1 : 0)}人）</h3><div class="tbl-wrap"><table class="stats"><tr><th>選手</th><th>所属</th><th>守備・役割</th><th>年齢</th><th>総合</th><th>代表</th><th>仲</th></tr>${meRow}${rows}</table></div>`;
+      }).join('');
+    }
+    return `<div class="panel">${head}${staffHtml}${squadHtml}${intlView(s)}</div>`;
+  };
+
+  const jpModal = (s) => {
+    if (!ui.jp) return '';
+    const msg = ui.jpMsg ? `<div class="mate-msg ${ui.jpMsg.tone || ''}">${br(ui.jpMsg.text)}</div>` : '';
+    const wrap = (title, body) => `<div class="modal-back" data-act="jpClose"><div class="modal mate-modal" role="dialog" aria-modal="true" data-stop="1">
+      <div class="modal-title">${title}</div>${body}${msg}
+      <div class="modal-choices"><button class="btn sub" data-act="jpClose">閉じる</button></div></div></div>`;
+    if (ui.jp.kind === 'staff') {
+      const st = G.jpStaffList(s).find((y) => y.key === ui.jp.id);
+      if (!st) return '';
+      const style = st.key === 'manager' ? G.jpStyle(s) : null;
+      const topics = G.jpStaffTopics(s, st)
+        .map((tp) => {
+          const why = G.jpCanStaffTalk(s, st);
+          return `<button class="act rest" data-act="jpStaffTalk" data-arg="${tp.id}" ${why ? 'disabled' : ''}><b>${tp.name}</b><small>${tp.desc}</small>${why ? `<small class="why">${esc(why)}</small>` : ''}</button>`;
+        })
+        .join('');
+      const aff = Math.round(st.aff || 0);
+      return wrap(
+        `${esc(st.name)} <span class="tag friend">${esc(st.role)}</span>`,
+        `<dl class="kv mate-kv"><dt>年齢</dt><dd>${st.age}歳</dd><dt>経歴</dt><dd>${esc(st.bio)}</dd>
+          ${style ? `<dt>タイプ</dt><dd>${esc(style.name)}<small class="muted">（${esc(style.desc)}）</small></dd>` : ''}
+          <dt>あなたとの仲</dt><dd><div class="bar aff"><div class="track"><div class="fill" style="width:${Math.min(100, aff)}%;background:#3b8ee0"></div></div><span class="val">${aff}</span></div>${st.key !== 'manager' ? '<small class="muted">信頼されると、首脳陣のミーティングで推してくれる</small>' : ''}</dd></dl>
+        <div class="section-title" style="margin-top:6px">話しかける</div><div class="act-grid">${topics}</div>`,
+      );
+    }
+    const x = G.jpMember(s, ui.jp.id);
+    if (!x) return '';
+    const per = G.personaById(x.persona);
+    const known = x.talks >= 2 || G.jpIsFriend(s, x) || x.pid || x.rosterId !== undefined;
+    const aff = Math.round(G.jpAff(s, x));
+    const friend = G.jpIsFriend(s, x);
+    const level = friend ? (aff >= 70 ? '親友' : '仲間') : aff >= 25 ? '話す仲' : aff >= 10 ? '顔見知り' : 'ほとんど話したことがない';
+    const topics = G.JP_TOPICS.filter((tp) => !tp.mlbOnly || x.mlb)
+      .map((tp) => {
+        const why = G.jpCanTalk(s, x, tp.id);
+        return `<button class="act rest" data-act="jpTalk" data-arg="${tp.id}" ${why ? 'disabled' : ''}><b>${tp.name}</b><small>${tp.desc}</small>${why ? `<small class="why">${esc(why)}</small>` : ''}</button>`;
+      })
+      .join('');
+    return wrap(
+      `${esc(x.name)} ${jpTags(s, x)}`,
+      `<div class="mate-head"><div class="num jp">${esc(G.jpPosName(x).slice(0, 2))}</div><div><b>${esc(G.jpTeamName(x))}・${x.age}歳</b><div class="muted" style="font-size:13px">${esc(G.jpPosName(x))}・総合 ${G.rank(x.rating)}・代表${(x.caps || 0) + 1}回目${x.withYou && x.withYou.length ? `（${x.withYou.join('・')}年に一緒だった）` : ''}</div></div></div>
+      <dl class="kv mate-kv"><dt>昨季</dt><dd>${esc(x.last || '-')}</dd>
+        <dt>性格</dt><dd>${known ? `${per.name}<small class="muted">（${per.hint}）</small>` : '？（何度か話すとわかる）'}</dd>
+        <dt>あなたとの仲</dt><dd><div class="bar aff"><div class="track"><div class="fill" style="width:${Math.min(100, aff)}%;background:#3b8ee0"></div></div><span class="val">${aff}</span></div><small class="muted">${level}${friend ? '（人間関係に登録済み）' : `・仲${G.FRIEND_AFF}で人間関係に加わる`}</small></dd></dl>
+      <div class="section-title" style="margin-top:6px">話しかける</div><div class="act-grid">${topics}</div>`,
+    );
+  };
+
   const peopleTab = (s) => {
     const P = s.people;
     const chainHtml = (id) => {
@@ -1148,6 +1284,7 @@
     const rivalNote = `<small class="muted">通算WAR ${rival.war.toFixed(1)}${rival.best ? `・${esc(rival.best)}` : ''}</small>`;
     const others = ['parents', 'friend', 'reporter'].map((id) => P[id]).filter((x) => x.met);
     const mates = G.mateFriends(s);
+    const jpFriends = G.jpFriends(s);
     const love = G.heroines(s).filter((h) => h.met);
     const unmet = G.heroines(s).filter((h) => !h.met).length;
     const pt = G.partner(s);
@@ -1155,6 +1292,7 @@
       <h3>チーム</h3><div class="people">${team.map((x) => card(x, x.id === 'rival' ? rivalNote : '')).join('')}</div>
       <h3 class="mt">仲良くなったチームメイト <span class="muted" style="font-size:12px">${mates.length}/${G.friendCap(s)}人</span></h3>
       ${mates.length ? `<div class="people">${mates.map((x) => card(x, `<small class="muted">性格：${esc(G.personaById(x.persona).name)}</small>`)).join('')}</div>` : '<p class="muted" style="font-size:13px">「チーム」タブで選手の名前を押して話しかけてみよう。気の合う仲間ができるかもしれない。</p>'}
+      ${jpFriends.length ? `<h3 class="mt">侍ジャパンの仲間 <span class="muted" style="font-size:12px">${jpFriends.length}/${G.jpFriendCap(s)}人</span></h3><div class="people">${jpFriends.map((x) => card(x, `<small class="muted">性格：${esc(G.personaById(x.persona).name)}</small>`)).join('')}</div>` : ''}
       <h3 class="mt">家族・友人・仕事</h3><div class="people">${others.map((x) => card(x)).join('')}</div>
       <h3 class="mt">恋愛</h3>
       ${love.length ? `<div class="people">${love.map((h) => card(h, s.story[`liked_${h.id}`] || h.dates >= 3 ? `<small class="muted">好み：${esc({ quiet: '落ち着いたデート', active: 'アクティブなデート', luxury: 'おしゃれなディナー', casual: '気軽なデート' }[G.heroineType(h).likes])}</small>` : '')).join('')}</div>` : '<p class="muted">まだ特別な出会いはない。</p>'}
@@ -1253,7 +1391,7 @@
     add(wd(c.awardsW, 1), 'season', '🏆 年間表彰式');
     add(wd(c.contractW, 1), 'season', '💴 契約更改');
     add(`${year}-12-31`, 'season', '🔔 大みそか');
-    for (const [d, cls, text] of G.intlEvents(s, year)) add(d, cls, text);
+    for (const [d, cls, text] of [...G.intlEvents(s, year), ...G.seriesEvents(s, year)]) add(d, cls, text);
     // 私生活
     if (p.birthday) add(`${year}-${p.birthday}`, 'life', `🎂 自分の誕生日`);
     const pt = G.partner(s);
@@ -1461,6 +1599,7 @@
     else if (ui.tab === 'shop') body = shopTab(s);
     else if (ui.tab === 'life') body = lifeTab(s);
     else if (ui.tab === 'people') body = peopleTab(s);
+    else if (ui.tab === 'japan') body = japanTab(s);
     else if (ui.tab === 'draft') body = draftTab(s);
     else if (ui.tab === 'calendar') body = calendarTab(s);
     else if (ui.tab === 'data') body = dataTab(s);
@@ -1636,6 +1775,7 @@
     else if (ui.screen === 'ending') html = endingView();
     else html = titleView();
     if (ui.screen === 'game' && ui.mate && ui.s && !ui.s.queue.length) html += mateModal(ui.s);
+    if (ui.screen === 'game' && ui.jp && ui.s && !ui.s.queue.length) html += jpModal(ui.s);
     if (ui.screen === 'title' && ui.io) html += ioModal();
     if (ui.confirm) {
       html += `<div class="modal-back"><div class="modal" role="dialog" aria-modal="true">
@@ -1834,6 +1974,39 @@
     mateClose: (arg, el, e) => {
       ui.mate = null;
       ui.mateMsg = null;
+      render();
+    },
+    jpMember: (arg) => {
+      ui.jp = { kind: 'member', id: arg };
+      ui.jpMsg = null;
+      render();
+    },
+    jpStaff: (arg) => {
+      ui.jp = { kind: 'staff', id: arg };
+      ui.jpMsg = null;
+      render();
+    },
+    jpTalk: (arg) => {
+      const s = ui.s;
+      const x = ui.jp && G.jpMember(s, ui.jp.id);
+      if (!x) return;
+      ui.jpMsg = G.jpTalk(s, x, arg);
+      G.checkAch(s);
+      save();
+      render();
+    },
+    jpStaffTalk: (arg) => {
+      const s = ui.s;
+      const st = ui.jp && G.jpStaffList(s).find((y) => y.key === ui.jp.id);
+      if (!st) return;
+      ui.jpMsg = G.jpStaffTalk(s, st, arg);
+      G.checkAch(s);
+      save();
+      render();
+    },
+    jpClose: () => {
+      ui.jp = null;
+      ui.jpMsg = null;
       render();
     },
     achCat: (arg) => {
