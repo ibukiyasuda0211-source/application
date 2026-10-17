@@ -116,10 +116,11 @@
 
   // 効果の問い合わせ
   G.restBonus = (s) => G.invLv(s, 'care') * 3;
-  G.injuryMul = (s) => 1 - G.invLv(s, 'care') * 0.15;
+  G.on('injuryMul', (m, s) => m * (1 - G.invLv(s, 'care') * 0.15));
   G.agingReliefInvest = (p) => Math.max(0, ((p.invest && p.invest.care) || 0) - 1) * 0.12;
 
   G.buyInvestment = (s, id) => {
+    G.emit('invest:beforeBuy', s, id);
     const p = s.player;
     const inv = G.INVESTMENTS.find((x) => x.id === id);
     if (!inv || (s.after && !['future', 'legacy'].includes(inv.group))) return null;
@@ -191,33 +192,25 @@
   };
 
   // ---------- 練習効率（ラボ） ----------
-  const origMul = G.trainingMultiplier;
-  G.trainingMultiplier = (s) => origMul(s) * (1 + G.invLv(s, 'lab') * 0.1);
+  G.on('trainingMul', (m, s) => m * (1 + G.invLv(s, 'lab') * 0.1));
 
   // ---------- 別荘：充実度 ----------
-  const origWeekly = G.weeklyLife;
-  G.weeklyLife = (s) => {
-    origWeekly(s);
+  G.on('week:life', (s) => {
     if (G.invLv(s, 'villa')) G.addHappy(s, 0.4);
-  };
+  });
 
   // ---------- アカデミー：引退後に有利 ----------
-  const origStart = G.startAfterLife;
-  G.startAfterLife = (s, careerId) => {
-    origStart(s, careerId);
+  G.on('after:start', (s, careerId) => {
     const lv = G.invLv(s, 'academy');
     if (lv && s.after) {
       s.after.xp += lv * 120;
       G.scene(s, 'アカデミーの仲間', `出資してきた野球アカデミーのスタッフや子供たちが、引退を祝ってくれた。\n「これからは、もっと顔を出してくださいね！」\n\n（アカデミーのつながりで、新しい仕事も順調に滑り出した）`);
     }
-  };
-  const origIncome = G.afterIncome;
-  G.afterIncome = (s) => origIncome(s) + G.invLv(s, 'academy') * 6;
+  });
+  G.on('afterIncome', (inc, s) => inc + G.invLv(s, 'academy') * 6);
 
   // アカデミー出身の子がプロへ（毎年）
-  const origYearly = G.yearlyLife;
-  G.yearlyLife = (s) => {
-    origYearly(s);
+  G.on('year:life', (s) => {
     const lv = G.invLv(s, 'academy');
     if (!lv) return;
     s.player.popularity = G.clamp(s.player.popularity + lv * 0.5, 0, 100);
@@ -229,5 +222,5 @@
       G.scene(s, 'アカデミーからプロへ', `出資している野球アカデミーの卒業生・${name}が、${team.name}にドラフト指名された！\n「子供のころ、${s.player.name.split(' ')[0]}さんにバットの握り方を教わったんです」`);
       G.addHappy(s, 6);
     }
-  };
+  });
 })();

@@ -4,6 +4,7 @@
 
   // 話題になった出来事を記録（エゴサの投稿の元になる）
   G.buzz = (s, type, data = {}) => {
+    G.emit('buzz', s, type, data);
     if (!s.buzzLog) s.buzzLog = [];
     s.buzzLog.push({ w: G.absWeek(s), type, ...data });
     if (s.buzzLog.length > 60) s.buzzLog.splice(0, s.buzzLog.length - 60);

@@ -177,6 +177,7 @@
     delete p.girlfriend;
     delete p.children;
     delete p.house;
+    G.emit('migrate', s);
     return s;
   };
 
@@ -429,7 +430,7 @@
 
   G.privateActions = (s) => {
     const p = s.player;
-    const list = [...STATIC_ACTIONS, ...loveActions(s), ...(G.extraActions ? G.extraActions(s) : [])];
+    const list = [...STATIC_ACTIONS, ...loveActions(s), ...G.filter('extraActions', [], s)];
     return list.map((a) => {
       let reason = a.req ? a.req(s) : '';
       if (!reason && a.cost && p.money < a.cost) reason = 'お金が足りない';
@@ -440,7 +441,7 @@
   };
 
   G.doPrivate = (s, id) => {
-    const list = [...STATIC_ACTIONS, ...loveActions(s), ...(G.extraActions ? G.extraActions(s) : [])];
+    const list = [...STATIC_ACTIONS, ...loveActions(s), ...G.filter('extraActions', [], s)];
     const a = list.find((x) => x.id === id);
     if (!a) return '';
     if (a.cost) s.player.money -= a.cost;
@@ -453,6 +454,7 @@
       G.addHappy(s, -3);
       msg += '\n（同じ過ごし方が続いて、ちょっとマンネリ気味だ…）';
     }
+    G.emit('private', s, id, msg);
     return msg;
   };
 
@@ -640,6 +642,7 @@
     }
 
     G.checkStories(s);
+    G.emit('week:life', s);
   };
 
   // ---------- 人間関係のストーリー ----------
@@ -695,6 +698,7 @@
     if (pt && pt.stage === 'lover' && G.absWeek(s) - pt.since === 52) {
       scene(s, '記念日', `今日は${pt.name}と付き合って1年の記念日だ。\n「これからもよろしくね」\n\n` + fx(s, { aff: { [pt.id]: 8 }, happy: 4 }));
     }
+    G.emit('stories', s);
   };
 
   // ---------- 年越し ----------
@@ -748,6 +752,7 @@
     if (p.home === 'dorm' && p.age >= 24) {
       scene(s, '寮生活', '寮では最年長組になってきた。そろそろ一人暮らしを考えてもいい頃かもしれない。（「人生」タブで引っ越しできる）');
     }
+    G.emit('year:life', s);
   };
 
   // ---------- 住まい ----------
@@ -790,6 +795,7 @@
       choices: (s, q) => {
         const pt = G.partner(s);
         const h = s.people[q.data.hid];
+        if (!pt) return [{ label: 'もう過ぎたことだ', run: () => 'あのころの話を蒸し返す人は、もういない。' }]; // その間に別れていた
         return [
           { label: '正直に謝る', run: (s2) => `「…もう二度としないでね」なんとか許してもらえた。` + fx(s2, { aff: { [pt.id]: -15, [h.id]: -10 }, happy: -5 }) },
           { label: 'ただの友達だと言い張る', run: (s2) => (G.chance(0.5) ? '信じてもらえたようだ…。' + fx(s2, { aff: { [pt.id]: -5 } }) : '「嘘つき！」完全に怒らせてしまった。' + fx(s2, { aff: { [pt.id]: -35 }, happy: -10, pop: -2 })) },
@@ -799,6 +805,7 @@
     wedding: {
       choices: (s) => {
         const pt = G.partner(s);
+        if (!pt || pt.stage !== 'fiance') return [{ label: '…', run: () => '結婚式の予定は、なくなってしまった。' }]; // 式の前に別れていた
         const marry = (s2, text, f) => {
           pt.stage = 'married';
           pt.marriedYear = s2.year;
@@ -882,6 +889,7 @@
     quarrel: {
       choices: (s) => {
         const sp = G.spouse(s);
+        if (!sp) return [{ label: '…', run: () => 'もう、言い争う相手はいない。' }]; // その間に離婚していた
         return [
           { label: '素直に謝って話し合う', run: (s2) => `朝まで話し合い、${sp.name}の本音を聞くことができた。` + fx(s2, { aff: { [sp.id]: 20 }, happy: 3, stamina: -8 }) },
           { label: '野球で疲れていると言い返す', run: (s2) => '家の空気が重い…。' + fx(s2, { aff: { [sp.id]: -15 }, happy: -8, cond: -1 }) },

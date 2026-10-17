@@ -163,13 +163,10 @@
         return `${x.name}と${G.pick(SPOTS)}へ。（${x.name}との仲+${d}）` + PERKS[x.persona](s2);
       },
     }));
-  const prevExtra = G.extraActions;
-  G.extraActions = (s) => [...(prevExtra ? prevExtra(s) : []), ...(s.people ? mateActions(s) : [])];
+  G.on('extraActions', (list, s) => (s.people ? [...list, ...mateActions(s)] : list));
 
   // ---------- 毎週：疎遠・出来事 ----------
-  const origWeekly = G.weeklyLife;
-  G.weeklyLife = (s) => {
-    origWeekly(s);
+  G.on('week:life', (s) => {
     const R = s.roster;
     for (const x of G.mateFriends(s)) {
       const m = R && R.players.find((y) => y.id === x.mateId);
@@ -189,5 +186,5 @@
         G.scene(s, ev[0], ev[1]);
       }
     }
-  };
+  });
 })();

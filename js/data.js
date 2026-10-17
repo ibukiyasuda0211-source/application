@@ -85,6 +85,7 @@
   ];
 
   // 経験点カテゴリ
+  G.EXP_CAP = 999; // 経験点はそれぞれ999まで貯められる
   G.EXP_TYPES = [
     { id: 'muscle', name: '筋力', color: '#e74c3c' },
     { id: 'agility', name: '敏捷', color: '#3498db' },

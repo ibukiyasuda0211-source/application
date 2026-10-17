@@ -49,16 +49,18 @@
       if (s) {
         rows += `<div class="panel slot"><div class="info"><div class="muted" style="font-size:12px">スロット${i + 1}</div>${slotSummary(s)}</div>
           <div class="btns"><button class="btn" data-act="continue" data-arg="${i}">${s.ended ? '記録を見る' : 'つづき'}</button>
-          <button class="btn danger small" data-act="delete" data-arg="${i}">削除</button></div></div>`;
+          <span class="btns-row"><button class="btn sub small" data-act="exportSlot" data-arg="${i}">書き出す</button><button class="btn sub small" data-act="importSlot" data-arg="${i}">読み込む</button>
+          <button class="btn danger small" data-act="delete" data-arg="${i}">削除</button></span></div></div>`;
       } else {
         rows += `<div class="panel slot"><div class="info"><div class="muted" style="font-size:12px">スロット${i + 1}</div><b>― 空き ―</b></div>
-          <div class="btns"><button class="btn blue" data-act="newgame" data-arg="${i}">はじめから</button></div></div>`;
+          <div class="btns"><button class="btn blue" data-act="newgame" data-arg="${i}">はじめから</button>
+          <button class="btn sub small" data-act="importSlot" data-arg="${i}">セーブを読み込む</button></div></div>`;
       }
     }
     return `<div class="title-screen">
       <div class="logo"><div class="ball">⚾</div><h1>ダイヤモンド・ライフ</h1><p>〜 プロ野球人生シミュレーション 〜</p></div>
       <div class="slots">${rows}</div>
-      <div class="credit">ドラフト指名から引退まで、ひとりの野球選手の人生を体験しよう。<br>セーブデータはこのブラウザに保存されます。</div>
+      <div class="credit">ドラフト指名から引退まで、ひとりの野球選手の人生を体験しよう。<br>セーブデータはこのブラウザに保存されます。ブラウザのデータを消すと失われるので、ときどき「書き出す」でファイルに保管しておくと安心です（別の端末に移すときも「書き出す」→「読み込む」）。</div>
     </div>`;
   };
 
@@ -1586,6 +1588,28 @@
     </div></div>`;
   };
 
+  // ---------- セーブの書き出し・読み込み ----------
+  const ioModal = () => {
+    const io = ui.io;
+    if (io.mode === 'export') {
+      return `<div class="modal-back"><div class="modal io-modal" role="dialog" aria-modal="true">
+        <div class="modal-title">スロット${io.slot + 1}を書き出す</div>
+        <div class="modal-text">${io.downloaded ? 'ファイル（.json）を保存しました。' : ''}ファイルの保存がうまくいかないときは、下のテキストをすべてコピーして、メモ帳などに貼り付けて保管してください。</div>
+        <textarea id="ioText" class="io-text" readonly>${esc(io.text)}</textarea>
+        <div class="muted" style="font-size:12px">${Math.round(io.text.length / 1024)}KB</div>
+        <div class="modal-choices"><button class="btn" data-act="ioCopy">テキストをコピー</button><button class="btn sub" data-act="ioClose">閉じる</button></div>
+      </div></div>`;
+    }
+    return `<div class="modal-back"><div class="modal io-modal" role="dialog" aria-modal="true">
+      <div class="modal-title">スロット${io.slot + 1}に読み込む</div>
+      <div class="modal-text">書き出したファイルを選ぶか、書き出したテキストを貼り付けてください。${G.loadAll()[io.slot] ? '<br><b class="neg">このスロットのデータは上書きされます。</b>' : ''}</div>
+      <input type="file" id="ioFile" accept=".json,application/json,text/plain">
+      <textarea id="ioText" class="io-text" placeholder="ここにテキストを貼り付け">${esc(io.text || '')}</textarea>
+      ${io.error ? `<div class="mate-msg bad">${esc(io.error)}</div>` : ''}
+      <div class="modal-choices"><button class="btn" data-act="ioImport">読み込む</button><button class="btn sub" data-act="ioClose">やめる</button></div>
+    </div></div>`;
+  };
+
   // ================= 描画 =================
   const render = () => {
     let html;
@@ -1594,6 +1618,7 @@
     else if (ui.screen === 'ending') html = endingView();
     else html = titleView();
     if (ui.screen === 'game' && ui.mate && ui.s && !ui.s.queue.length) html += mateModal(ui.s);
+    if (ui.screen === 'title' && ui.io) html += ioModal();
     if (ui.confirm) {
       html += `<div class="modal-back"><div class="modal" role="dialog" aria-modal="true">
         <div class="modal-title">確認</div><div class="modal-text">${br(ui.confirm.text)}</div>
@@ -1643,6 +1668,61 @@
         yes: '削除する',
         run: () => G.deleteSlot(Number(arg)),
       };
+      render();
+    },
+    exportSlot: (arg) => {
+      const i = Number(arg);
+      const s = G.loadAll()[i];
+      if (!s) return;
+      const text = G.exportSave(s);
+      let downloaded = false;
+      try {
+        const blob = new Blob([text], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `diamond-life_${s.player.name.replace(/\s+/g, '')}_${s.year}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+        downloaded = true;
+      } catch (e) {
+        downloaded = false;
+      }
+      ui.io = { mode: 'export', slot: i, text, downloaded };
+      render();
+    },
+    importSlot: (arg) => {
+      ui.io = { mode: 'import', slot: Number(arg), text: '', error: '' };
+      render();
+    },
+    ioCopy: () => {
+      const ta = document.getElementById('ioText');
+      if (!ta) return;
+      ta.select();
+      const done = () => toast('コピーしました');
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(done, () => (document.execCommand('copy'), done()));
+      else {
+        document.execCommand('copy');
+        done();
+      }
+    },
+    ioImport: () => {
+      const io = ui.io;
+      const ta = document.getElementById('ioText');
+      const text = ta ? ta.value : io.text;
+      try {
+        const s = G.importSave(text);
+        if (!G.saveToSlot(s, io.slot)) throw new Error('ブラウザに保存できませんでした（空き容量が足りないかもしれません）');
+        ui.io = null;
+        toast(`スロット${io.slot + 1}に「${s.player.name}」を読み込みました`);
+      } catch (e) {
+        ui.io = { ...io, text, error: e.message };
+      }
+      render();
+    },
+    ioClose: () => {
+      ui.io = null;
       render();
     },
     totitle: () => {
@@ -1978,6 +2058,17 @@
     if (!el || el.disabled) return;
     const h = handlers[el.dataset.act];
     if (h) h(el.dataset.arg, el);
+  });
+
+  // 読み込むファイルを選んだら、中身をテキスト欄に入れる
+  document.addEventListener('change', (e) => {
+    if (e.target.id !== 'ioFile' || !e.target.files || !e.target.files[0] || !ui.io) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      ui.io = { ...ui.io, text: String(reader.result || ''), error: '' };
+      render();
+    };
+    reader.readAsText(e.target.files[0]);
   });
 
   document.addEventListener('input', (e) => {

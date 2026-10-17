@@ -194,9 +194,7 @@
     }
   };
 
-  const origScheduled = G.scheduled;
-  G.scheduled = (s) => {
-    origScheduled(s);
+  G.on('scheduled', (s) => {
     if (!G.isIntlYear(s.year) || s.retired || s.after) return;
     const d = G.intlDates(s.year);
     const w = s.week;
@@ -218,7 +216,7 @@
       else if (w === d.qfW && s.intl) runStage(s, 1);
       else if (w === d.finalW && s.intl) runStage(s, 2);
     }
-  };
+  });
 
   G.LIFE_SCENES.intl_select = {
     choices: (s) => [

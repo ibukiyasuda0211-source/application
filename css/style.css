@@ -2419,3 +2419,28 @@ h3 {
   border-color: var(--bad);
   background: #fdf0f0;
 }
+
+/* ---------- セーブの書き出し・読み込み ---------- */
+.io-modal {
+  max-width: 560px;
+}
+.io-text {
+  width: 100%;
+  min-height: 120px;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 11px;
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  padding: 6px;
+  margin: 8px 0 4px;
+  resize: vertical;
+}
+.io-modal input[type='file'] {
+  margin-top: 8px;
+  max-width: 100%;
+}
+.slot .btns-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}

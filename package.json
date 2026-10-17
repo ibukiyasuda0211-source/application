@@ -1,0 +1,11 @@
+{
+  "name": "diamond-life",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ひとりのプロ野球選手の人生をシミュレーションするブラウザゲーム",
+  "scripts": {
+    "test": "node tests/run.js",
+    "balance": "node tests/balance.js",
+    "build": "node tools/build.js"
+  }
+}

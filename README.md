@@ -62,24 +62,62 @@
 ```
 index.html
 css/style.css
-js/util.js     汎用関数
-js/data.js     球団・名前・特殊能力・ショップなどのデータ
-js/calendar.js 実際の日付とプロ野球の年間日程
-js/player.js   選手生成・能力・成長・衰え
-js/sim.js      打席／投球シミュレーション・WAR
-js/events.js   ランダムイベント
-js/life.js     私生活（人間関係・恋愛・家族・住まい・趣味・充実度・第二の人生）
-js/match.js    試合ごとの作戦選択と1試合ずつの進行
-js/manager.js  監督の起用判断（打順・スタメン・登録抹消・投手の配置）
-js/position.js ポジション変更（相談・打診）
-js/defense.js  守備のシミュレーションと守備成績
-js/team.js     チームメイト（ロースター・打順・成績）
-js/sns.js      SNSのエゴサーチ
-js/draft.js    ドラフト同期のシミュレーション
-js/mlb.js      メジャー挑戦・日本復帰
-js/after.js    引退後もつづく人生
-js/game.js     週送り・年間スケジュール・契約・引退・セーブ
-js/ui.js       画面描画と操作
+js/util.js         汎用関数
+js/hooks.js        機能どうしをつなぐ「合図」（G.on / G.emit / G.filter / G.blocked）
+js/data.js         球団・名前・特殊能力・ショップなどのデータ
+js/calendar.js     実際の日付・年間日程・3連戦の対戦カード
+js/player.js       選手生成・能力・成長・衰え（エイジングカーブ）
+js/sim.js          打席／投球シミュレーション・WAR
+js/defense.js      守備のシミュレーションと守備成績
+js/events.js       ランダムイベント
+js/life.js         私生活（人間関係・恋愛・家族・住まい・趣味・充実度・第二の人生）
+js/match.js        試合ごとの作戦選択・1試合ずつの進行・スコアボード
+js/clutch.js       「ここぞ！」の勝負どころ
+js/matchup.js      相性（左右・タイプ・球場）と条件別の成績
+js/manager.js      監督の起用判断（打順・スタメン・登録抹消・投手の配置）
+js/position.js     ポジション変更（相談・打診）
+js/veteran.js      ベテランの調整・モデルチェンジ
+js/team.js         チームメイト（ロースター・打順・成績）
+js/sns.js          SNSのエゴサーチ
+js/draft.js        ドラフト同期のシミュレーションと評価
+js/mlb.js          メジャー挑戦・日本復帰
+js/after.js        引退後もつづく人生
+js/game.js         週送り・年間スケジュール・契約・引退・セーブ（書き出し・読み込み）
+js/invest.js       大きな買い物・投資
+js/mlblife.js      メジャーの疲労と適応
+js/mates.js        チームメイトとの交流
+js/intl.js         国際大会（日本代表）
+js/rival.js        合同自主トレ・タイトル争い
+js/transfer.js     国内FA・トレード
+js/achievements.js 実績
+js/legacy.js       寄付・記念館・球団買収・記録のセレモニー・殿堂入り
+js/chains.js       人間関係のつながり（イベントの連鎖）
+js/auto.js         おまかせ進行
+js/ui.js           画面描画と操作
+tests/             自動テスト（npm test）とバランス確認（npm run balance）
+tools/build.js     1ファイルにまとめたHTMLをつくる（npm run build）
 ```
+
+## 開発者向け
+
+Node.js があれば、追加のインストールなしで動きます。
+
+| コマンド | 内容 |
+| --- | --- |
+| `npm test` | 自動テスト。日程（143試合・交流戦）、試合結果とスコアボードの整合性、ドラフト同期とチームメイトの一致、入団からエンディングまでの通しプレイ、セーブの書き出し・読み込みを確かめる |
+| `npm run balance` | おまかせで何十人分もの野球人生を走らせ、通算成績・タイトル・お金・充実度の分布を表示する（`npm run balance -- 100` で人数指定） |
+| `npm run build` | すべてを1ファイルにまとめた `dist/diamond-life.html` をつくる |
+
+### 機能の足し方（合図の仕組み）
+
+本体の処理は決まった場所で合図を出し、追加機能はそれを受け取って動きます。既存の関数を上書きしないので、読み込み順や機能どうしの重なりで壊れにくくなっています。
+
+```js
+G.on('week:life', (s) => { /* 毎週の私生活のあと */ });
+G.on('trainingMul', (m, s) => m * 1.1);          // 値を加工する（filter）
+G.on('contractScene', (s) => G.underContract(s)); // true を返すと本体の処理を止める（blocked）
+```
+
+主な合図：`newGame` `week:life` `week:after` `year:life` `stories` `private` `buzz` `season:week` `scheduled` `seasonEnd` `leaders` `scene:resolved` `retire` `finishLife` `after:start` `after:week` `after:newYear` `after:seasonEnd` `joinMLB` `joinNPB` `ownGame:prepare` `ownGame:result` `ach:before` `invest:beforeBuy` `migrate`（値の加工：`trainingMul` `injuryMul` `afterIncome` `extraActions` `canJointTrain`、止める：`contractScene` `releaseCheck` `mlbCheck`）
 
 球団・選手名はすべて架空のものです。

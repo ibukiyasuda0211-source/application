@@ -49,14 +49,14 @@
   };
 
   // ---------- メジャー挑戦の打診（オフ・第46週） ----------
-  G.mlbCheck = (s) => {
+  const mlbCheckCore = (s) => {
     const p = s.player;
     if (G.isMLB(s) || p.age > 34 || s.retired) return;
     if (s.flags.mlbAsked === s.year) return;
     const war = G.seasonWAR(p, s);
     const careerWar = G.careerTotals(s).war + war;
     const overseasFA = p.yearsPro >= 8;
-    if (war < 3 && !(careerWar >= 15 && war >= 2)) return;
+    if (war < 4.5 && !(careerWar >= 25 && war >= 3.5)) return;
     if (!overseasFA && p.yearsPro < 4) return;
     if (!overseasFA && !G.chance(p.trust >= 60 ? 0.6 : 0.3)) return;
     s.flags.mlbAsked = s.year;
@@ -75,8 +75,12 @@
       data: { offers },
     });
   };
+  G.mlbCheck = (s) => {
+    if (G.blocked('mlbCheck', s)) return;
+    mlbCheckCore(s);
+  };
 
-  G.joinMLB = (s, offer) => {
+  const joinMLBCore = (s, offer) => {
     const p = s.player;
     const team = G.teamById(offer.teamId);
     s.flags.formerTeam = p.teamId;
@@ -95,6 +99,11 @@
     G.buzz(s, 'mlb');
     return `${team.name}と契約！ 年俸${G.fmtMoney(offer.salary)}。\n\n渡米会見には100人を超える記者が詰めかけた。いよいよ世界最高峰の舞台へ！` + G.applyFx(s, { pop: 8, happy: 8 });
   };
+  G.joinMLB = (s, offer) => {
+    const text = joinMLBCore(s, offer);
+    G.emit('joinMLB', s, offer);
+    return text;
+  };
 
   // 日本球界からのオファー
   G.npbOffers = (s) => {
@@ -107,7 +116,7 @@
     return list.slice(0, 2).map((t, i) => ({ teamId: t.id, salary: Math.round((base * (i === 0 && former ? 1.15 : G.rf(0.9, 1.1))) / 10) * 10 }));
   };
 
-  G.joinNPB = (s, offer) => {
+  const joinNPBCore = (s, offer) => {
     const p = s.player;
     const team = G.teamById(offer.teamId);
     p.league = 'npb';
@@ -119,6 +128,11 @@
     if (G.isPitcher(p)) G.assignRole(s);
     s.history.push({ year: s.year, text: `${team.name}で日本球界に復帰` });
     return `${team.name}で日本球界に復帰することになった！ 年俸${G.fmtMoney(offer.salary)}。\n「ただいま」という言葉に、スタンドから大きな拍手が起きた。` + G.applyFx(s, { pop: 4, happy: 6 });
+  };
+  G.joinNPB = (s, offer) => {
+    const text = joinNPBCore(s, offer);
+    G.emit('joinNPB', s, offer);
+    return text;
   };
 
   G.mlbContractTarget = (s) => {

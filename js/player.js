@@ -72,7 +72,7 @@
       background: bg.id,
       growth,
       talent: G.rf(0.92, 1.12),
-      ceiling: G.ri(68, 92),
+      ceiling: G.clamp(Math.round(G.gauss(64, 8)), 50, 92), // 素質（ここを超えると伸びにくい）
       age: bg.age,
       birthday: G.randomBirthday(),
       condition: 2,
@@ -172,12 +172,17 @@
     if (G.newSeasonBars) G.newSeasonBars(s);
   };
 
+  // 変化球の総合点（球種の多さと変化量）
+  G.breakScore = (pt) => {
+    const total = pt.pitches.reduce((s, x) => s + x.level, 0);
+    return Math.min(100, total * 4 + pt.pitches.length * 2);
+  };
+
   // 投手の総合力（被打率・防御率の元になる値）
   G.pitchQuality = (p) => {
     const pt = p.pitcher;
     const vScore = G.clamp((pt.velocity - 125) * 2.2, 0, 100);
-    const total = pt.pitches.reduce((s, x) => s + x.level, 0);
-    const bScore = Math.min(100, total * 5 + pt.pitches.length * 3);
+    const bScore = G.breakScore(pt);
     let q = 0.36 * vScore + 0.36 * pt.control + 0.28 * bScore;
     if (p.throws === 'L') q += 2;
     if (p.skills.includes('nobi')) q += 2;
@@ -193,6 +198,7 @@
   };
 
   // 能力値を1上げるのに必要な経験点
+  G.PHYSICAL_ABILITIES = ['power', 'speed', 'arm', 'velocity', 'stamina'];
   // 素質（ceiling）を超えると必要経験点が大きく増える
   G.abilityCost = (abil, value, p) => {
     let v = value;
@@ -202,11 +208,16 @@
       mul = 1.3;
     }
     v = Math.max(0, v);
-    if (p && p.ceiling && v >= p.ceiling) mul *= 2.5;
-    const main = Math.round((8 + v * 0.3 + Math.max(0, v - 55) ** 2 * 0.035) * mul);
+    if (p && p.ceiling && v >= p.ceiling) mul *= 3 + (v - p.ceiling) * 0.4;
+    // 30歳を過ぎると、体の能力（パワー・走力・肩・球速・スタミナ）は上げにくくなる
+    if (p && p.age > 29 && G.PHYSICAL_ABILITIES.includes(abil.id)) mul *= 1 + (p.age - 29) * 0.1;
+    const main = Math.round((10 + v * 0.35 + Math.max(0, v - 50) ** 2 * 0.05) * mul);
     const sub = Math.round(main * 0.5);
     return { [abil.main]: main, [abil.sub]: sub };
   };
+
+  // 素質（ceiling）に届いているか
+  G.overCeiling = (p, id, value) => !!p.ceiling && (id === 'velocity' ? (value - 120) * 2.4 : value) >= p.ceiling;
 
   G.abilityValue = (p, abil) => (G.isPitcher(p) ? p.pitcher[abil.id] : p.batter[abil.id]);
 
@@ -230,7 +241,7 @@
     return true;
   };
 
-  G.pitchLevelCost = (level) => ({ breaking: 25 + level * 20, technique: 10 + level * 5 });
+  G.pitchLevelCost = (level) => ({ breaking: 30 + level * 25 + level * level * 4, technique: 12 + level * 8 });
   G.NEW_PITCH_COST = { breaking: 60, technique: 25 };
   G.MAX_PITCHES = 5;
   G.MAX_PITCH_LEVEL = 7;
@@ -300,7 +311,7 @@
     p.vetCare = 0;
     const keep = G.agingKeep ? G.agingKeep(p) : [];
     const half = (k, d) => (keep.includes(k) ? Math.floor(d / 2) : d);
-    const amt = Math.max(1, Math.ceil(over * 1.6 * (1 - relief)));
+    const amt = Math.max(1, Math.ceil(over * 2.1 * (1 - relief)));
     // 体（筋力・スピード系）は大きく、技術系はゆるやかに落ちる
     const W = G.AGING_WEIGHT;
     const dec = (k, d) => half(k, Math.round(d * (W[k] || 1)));

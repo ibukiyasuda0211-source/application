@@ -88,13 +88,10 @@
 
   // ---------- 試合ごとの条件 ----------
   // 相手先発の利き腕、相手打線の左右
-  const origPrepare = G.prepareOwnGame;
-  G.prepareOwnGame = (s, oppId) => {
-    const ctx = origPrepare(s, oppId);
+  G.on('ownGame:prepare', (s, ctx) => {
     if (ctx.oppP) ctx.oppP.hand = G.chance(0.32) ? 'L' : 'R';
     if (ctx.kind === 'pit') ctx.lineupHand = G.weighted([{ v: 'L', weight: 3 }, { v: 'R', weight: 4 }, { v: 'mix', weight: 3 }]).v;
-    return ctx;
-  };
+  });
   G.HAND_NAME = { L: '左腕', R: '右腕' };
   G.LINEUP_HAND = { L: '左打者が多い', R: '右打者が多い', mix: '左右バランス型' };
   const ptypeGroup = (t) => (t === 'fast' || t === 'ace' ? 'fast' : t === 'soft' || t === 'control' ? 'breaking' : null);
@@ -148,13 +145,11 @@
     G.addStats(store[key], line);
   };
 
-  const origExec = G.executeOwnGame;
-  G.executeOwnGame = (s, ctx, apId, clutchId) => {
-    const res = origExec(s, ctx, apId, clutchId);
-    if (!res || !res.kind || !res.line) return res;
+  G.on('ownGame:result', (s, ctx, res) => {
+    if (!res || !res.kind || !res.line) return;
     const sp = bucket(s);
     const pit = res.kind === 'pit';
-    if (!pit && !res.line.pa) return res;
+    if (!pit && !res.line.pa) return;
     const keys = [`park:${parkIdOf(s, ctx)}`, `opp:${ctx.oppId}`];
     if (!pit && ctx.oppP) {
       keys.push(`hand:${ctx.oppP.hand || 'R'}`, `ptype:${ctx.oppP.type}`);
@@ -168,8 +163,7 @@
       add(sp.season, k, res.line, pit);
       add(sp.career, k, res.line, pit);
     }
-    return res;
-  };
+  });
 
   // ---------- 表示用 ----------
   G.splitValue = (line, pit) => {

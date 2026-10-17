@@ -9,7 +9,7 @@
     if (fx.exp) {
       for (const k in fx.exp) {
         const v = Math.round(fx.exp[k]);
-        p.exp[k] = Math.max(0, p.exp[k] + v);
+        p.exp[k] = G.clamp(p.exp[k] + v, 0, Math.max(G.EXP_CAP, p.exp[k]));
         const name = G.EXP_TYPES.find((e) => e.id === k).name;
         out.push(`${name}${v >= 0 ? '+' : ''}${v}`);
       }
@@ -48,7 +48,10 @@
     }
     if (fx.ability) {
       for (const k in fx.ability) {
-        const v = fx.ability[k];
+        let v = fx.ability[k];
+        // 素質を超えた能力は、コーチの指導などでも1しか伸びない
+        const cur = G.isPitcher(p) ? p.pitcher[k] : p.batter[k];
+        if (v > 1 && cur !== undefined && G.overCeiling(p, k, cur)) v = 1;
         if (G.isPitcher(p) && k in p.pitcher) {
           p.pitcher[k] = G.clamp(p.pitcher[k] + v, 1, k === 'velocity' ? 168 : 100);
           const ab = G.PITCHER_ABILITIES.find((a) => a.id === k);

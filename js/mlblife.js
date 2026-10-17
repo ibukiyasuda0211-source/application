@@ -12,9 +12,7 @@
   G.inMLB = (s) => G.isMLB(s) && !s.retired && !!ml(s);
 
   // ---------- 渡米・帰国 ----------
-  const origJoinMLB = G.joinMLB;
-  G.joinMLB = (s, offer) => {
-    const text = origJoinMLB(s, offer);
+  G.on('joinMLB', (s, offer) => {
     const p = s.player;
     p.mlbLife = { fatigue: 15, adapt: G.ri(8, 18) + (p.skills.includes('mood') ? 8 : 0), loc: offer.teamId };
     G.scene(
@@ -22,14 +20,10 @@
       'アメリカでの生活',
       'メジャーの世界は、日本とはまるで違う。\n\n・162試合に匹敵する長いシーズンを、東海岸から西海岸まで飛行機で移動しながら戦う。時差のある遠征が続くと「疲労」がたまり、成績もケガのリスクも悪化する\n・言葉も食事も文化も違う。チームに溶け込む「適応度」が低いうちは、実力を出し切れない\n・練習に使える時間は日本より短い。休養やコンディショニングがより大切になる\n\n「オフの過ごし方」に「アメリカ生活」が加わった。英会話やチームメイトとの交流で適応を、コンディショニングや休養で疲労を管理しよう。',
     );
-    return text;
-  };
-  const origJoinNPB = G.joinNPB;
-  G.joinNPB = (s, offer) => {
-    const text = origJoinNPB(s, offer);
+  });
+  G.on('joinNPB', (s) => {
     s.player.mlbLife = null;
-    return text;
-  };
+  });
 
   // ---------- 疲労と適応が成績に与える影響 ----------
   G.mlbOffset = (s) => {
@@ -40,10 +34,8 @@
     if (m.adapt < 70) off -= (70 - m.adapt) * 0.05;
     return off;
   };
-  const origInj = G.injuryMul;
-  G.injuryMul = (s) => origInj(s) * (G.inMLB(s) ? 1 + ml(s).fatigue / 110 : 1);
-  const origMul = G.trainingMultiplier;
-  G.trainingMultiplier = (s) => origMul(s) * (G.inMLB(s) ? 0.82 : 1);
+  G.on('injuryMul', (m, s) => m * (G.inMLB(s) ? 1 + ml(s).fatigue / 110 : 1));
+  G.on('trainingMul', (m, s) => m * (G.inMLB(s) ? 0.82 : 1));
 
   // ---------- 今週の移動（遠征）----------
   G.mlbTravel = (s, week = s.week) => {
@@ -68,9 +60,7 @@
   };
 
   // 週の終わりに疲労と適応を更新
-  const origWeekly = G.weeklyLife;
-  G.weeklyLife = (s) => {
-    origWeekly(s);
+  G.on('week:life', (s) => {
     if (!G.inMLB(s)) return;
     const p = s.player;
     const m = ml(s);
@@ -87,7 +77,7 @@
     if (m.fatigue >= 60) p.stamina = G.clamp(p.stamina - (m.fatigue - 50) * 0.3, 0, 100);
     if (m.adapt < 40) G.addHappy(s, -0.6);
     if (!s.queue.some((q) => q.kind !== 'info') && G.chance(0.06)) mlbEvent(s);
-  };
+  });
 
   const fx = (s, f) => G.applyFx(s, f);
   const bump = (s, k, v) => {
@@ -125,15 +115,12 @@
   ];
 
   G.PLACES.push({ id: 'usa', name: 'アメリカ生活' });
-  G.extraActions = (s) => (G.inMLB(s) ? G.MLB_ACTIONS.map((a) => ({ ...a, place: 'usa' })) : []);
+  G.on('extraActions', (list, s) => (G.inMLB(s) ? [...list, ...G.MLB_ACTIONS.map((a) => ({ ...a, place: 'usa' }))] : list));
 
   // 古いセーブでメジャーにいる場合
-  const origMigrate = G.migrate;
-  G.migrate = (s) => {
-    origMigrate(s);
+  G.on('migrate', (s) => {
     if (G.isMLB(s) && !s.player.mlbLife && !s.retired) s.player.mlbLife = { fatigue: 20, adapt: 50, loc: s.player.teamId };
-    return s;
-  };
+  });
 
   // ---------- 表示用 ----------
   G.mlbStatus = (s) => {

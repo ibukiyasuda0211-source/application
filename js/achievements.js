@@ -615,6 +615,7 @@
   };
 
   G.checkAch = (s, x = {}) => {
+    if (s && s.player && !s.ended) G.emit('ach:before', s, x);
     if (!s || !s.player || s.ended) return;
     const d = data(s);
     if (x.game && x.game.kind) trackGame(s, d, x.game);
@@ -640,18 +641,14 @@
     return { got, total: list.length };
   };
 
-  // ---------- 既存の処理に「記録をとる」仕組みを差し込む ----------
-  const origBuzz = G.buzz;
-  G.buzz = (s, type, dt) => {
+  // ---------- 合図を受けて記録をとる ----------
+  G.on('buzz', (s, type) => {
     const d = data(s);
     d.buzz[type] = (d.buzz[type] || 0) + 1;
     if (type === 'demote') d.promoteAtDemote = d.buzz.promote || 0;
-    return origBuzz(s, type, dt);
-  };
+  });
 
-  const origPriv = G.doPrivate;
-  G.doPrivate = (s, id) => {
-    const msg = origPriv(s, id);
+  G.on('private', (s, id, msg) => {
     const d = data(s);
     const key = String(id).split(':')[0];
     d.priv[key] = (d.priv[key] || 0) + 1;
@@ -660,42 +657,17 @@
       const r = G.egoSearch(s);
       if (r && r.score >= 75) d.flags.loved = true;
     }
-    return msg;
-  };
+  });
 
-  const origEndWeek = G.endWeek;
-  G.endWeek = (s, gw) => {
-    const date = G.weekDate(s, 6);
-    origEndWeek(s, gw);
-    G.checkAch(s, { date });
-  };
-
-  const origAfterWeek = G.doAfterWeek;
-  G.doAfterWeek = (s, workId, privId) => {
-    const date = G.weekDate(s, 6);
-    origAfterWeek(s, workId, privId);
-    G.checkAch(s, { date });
-  };
-
-  const origResolve = G.resolveScene;
-  G.resolveScene = (s, idx, input) => {
-    origResolve(s, idx, input);
-    G.checkAch(s);
-  };
-
-  const origNewGame = G.newGame;
-  G.newGame = (opt, slot) => {
-    const s = origNewGame(opt, slot);
+  G.on('week:after', (s, date) => G.checkAch(s, { date }));
+  G.on('after:week', (s, date) => G.checkAch(s, { date }));
+  G.on('scene:resolved', (s) => G.checkAch(s));
+  G.on('newGame', (s) => {
     G.checkAch(s, { date: G.cal(s.year - 1).draftDate });
     s.achNew = [];
-    return s;
-  };
-
-  const origMigrate = G.migrate;
-  G.migrate = (s) => {
-    origMigrate(s);
+  });
+  G.on('migrate', (s) => {
     data(s);
     if (!s.player.birthday) s.player.birthday = G.randomBirthday();
-    return s;
-  };
+  });
 })();

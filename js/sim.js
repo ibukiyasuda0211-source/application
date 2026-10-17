@@ -128,8 +128,7 @@
     const pt = p.pitcher;
     const q = G.pitchQuality(p) + G.COND_OFFSET[p.condition] + levelOffset + G.gauss(0, 6);
     const vScore = G.clamp((pt.velocity - 125) * 2.2, 0, 100);
-    const total = pt.pitches.reduce((s, x) => s + x.level, 0);
-    const bScore = Math.min(100, total * 5 + pt.pitches.length * 3);
+    const bScore = G.breakScore(pt);
     const sk = (id) => p.skills.includes(id);
     const era = G.clamp(4.3 - (q - 45) * 0.055, 0.9, 9.5);
     return {

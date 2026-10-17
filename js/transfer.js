@@ -88,11 +88,8 @@
     if (G.teamById(teamId).league !== oldLeague && G.phaseOf(s.week, s.year).id === 'season') G.genLeaders(s);
   };
 
-  const origMlb = G.mlbCheck;
-  G.mlbCheck = (s) => {
-    if (s.queue.some((q) => q.id === 'fa_declare' || q.id === 'fa_offers')) return;
-    origMlb(s);
-  };
+  // FA交渉中はメジャー挑戦の打診を出さない
+  G.on('mlbCheck', (s) => s.queue.some((q) => q.id === 'fa_declare' || q.id === 'fa_offers'));
 
   G.LIFE_SCENES.fa_declare = {
     choices: (s, q) => {
@@ -130,7 +127,7 @@
           run: (s2) => {
             s2.flags.mlbAsked = null;
             const before = s2.queue.length;
-            origMlb(s2);
+            G.mlbCheck(s2);
             if (s2.queue.length > before) {
               s2.queue.unshift(s2.queue.pop());
               return null;
@@ -154,25 +151,19 @@
   };
 
   // 複数年契約の間は契約更改なし
-  const origContract = G.contractScene;
-  G.contractScene = (s) => {
+  G.on('contractScene', (s) => {
     const p = s.player;
-    if (G.underContract(s) && p.age < 44 && !G.isMLB(s)) {
-      const c = p.contract;
-      const n = s.year - c.since;
-      G.scene(s, '契約更改', `${c.years}年契約の${n}年目が終わった。\n来季も年俸${G.fmtMoney(p.salary)}で契約が続く（${c.until}年まで）。\n\n${G.seasonSummaryText(s)}`);
-      return;
-    }
-    origContract(s);
-  };
-  const origRelease = G.releaseCheck;
-  G.releaseCheck = (s) => {
-    if (G.underContract(s)) {
-      s.flags.releasedThisYear = false;
-      return;
-    }
-    origRelease(s);
-  };
+    if (!(G.underContract(s) && p.age < 44 && !G.isMLB(s))) return false;
+    const c = p.contract;
+    const n = s.year - c.since;
+    G.scene(s, '契約更改', `${c.years}年契約の${n}年目が終わった。\n来季も年俸${G.fmtMoney(p.salary)}で契約が続く（${c.until}年まで）。\n\n${G.seasonSummaryText(s)}`);
+    return true;
+  });
+  G.on('releaseCheck', (s) => {
+    if (!G.underContract(s)) return false;
+    s.flags.releasedThisYear = false;
+    return true;
+  });
 
   // ---------- トレード ----------
   G.canRequestTrade = (s) => {
@@ -250,18 +241,14 @@
     },
   };
 
-  const origWeekSeason = G.weekSeason;
-  G.weekSeason = (s, gw) => {
-    origWeekSeason(s, gw);
+  G.on('season:week', (s, gw) => {
     const c = G.cal(s.year);
     const deadline = G.weekOfDate(s.year, new Date(Date.UTC(s.year, 6, 31)));
     if (s.week >= c.startW + 3 && s.week <= deadline) G.tradeCheck(s, false);
-  };
+  });
 
-  const origScheduled = G.scheduled;
-  G.scheduled = (s) => {
-    origScheduled(s);
+  G.on('scheduled', (s) => {
     const c = G.cal(s.year);
     if (s.week === c.faW + 1 && !s.flags.releasedThisYear && !s.ended && !s.retired) G.tradeCheck(s, true);
-  };
+  });
 })();

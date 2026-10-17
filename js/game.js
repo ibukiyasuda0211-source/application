@@ -2,6 +2,7 @@
 (function () {
   const G = window.G;
 
+  G.TRAIN_EXP_SCALE = 0.65; // 練習でもらえる経験点の全体の量（バランス調整用）
   G.PHASE_MUL = { jan: 1.0, camp: 1.4, open: 1.0, season: 0.55, post: 0.7, fall: 1.25, off: 0.85 };
   G.COND_TRAIN_MUL = [0.75, 0.9, 1.0, 1.1, 1.25];
 
@@ -35,7 +36,7 @@
   G.scene = scene;
 
   // ---------- ニューゲーム ----------
-  G.newGame = (opt, slot) => {
+  const newGameCore = (opt, slot) => {
     const p = G.createPlayer(opt);
     const team = G.pick(G.NPB_TEAMS());
     p.teamId = team.id;
@@ -102,13 +103,18 @@
     log(s, `${team.name}にドラフト${rank}位で入団！`, 'good');
     return s;
   };
+  G.newGame = (opt, slot) => {
+    const s = newGameCore(opt, slot);
+    G.emit('newGame', s);
+    return s;
+  };
 
   G.resetStandings = (s) => {
     s.standings = {};
     for (const t of G.TEAMS) s.standings[t.id] = { w: 0, l: 0, d: 0 };
   };
 
-  G.genLeaders = (s) => {
+  const genLeadersCore = (s) => {
     const p = s.player;
     if (p.league === 'mlb') return G.mlbLeaders(s);
     const league = G.teamById(p.teamId).league;
@@ -126,6 +132,10 @@
       s: mk(G.ri(28, 42)),
       hld: mk(G.ri(30, 44)),
     };
+  };
+  G.genLeaders = (s) => {
+    genLeadersCore(s);
+    G.emit('leaders', s);
   };
 
   G.leagueRanking = (s, leagueId) => {
@@ -170,7 +180,7 @@
     const phase = G.phaseOf(s.week, s.year).id;
     let m = G.PHASE_MUL[phase] * G.COND_TRAIN_MUL[p.condition] * G.growthMultiplier(p);
     if (s.flags.trainerUntil === s.year) m *= 1.25;
-    return m;
+    return G.filter('trainingMul', m, s);
   };
 
   G.injure = (s, forced) => {
@@ -201,7 +211,7 @@
         : { muscle: 9, agility: 8, technique: 9, mind: 6 };
     }
     const real = {};
-    for (const k in gain) real[k] = Math.round(gain[k] * mul * G.ageExpMul(p, k) * G.rf(0.8, 1.0));
+    for (const k in gain) real[k] = Math.round(gain[k] * mul * G.ageExpMul(p, k) * G.TRAIN_EXP_SCALE * G.rf(0.8, 1.0));
     const staminaCost = t.stamina;
     p.stamina = G.clamp(p.stamina - staminaCost, 0, 100);
     let msg = `${t.name}をした。` + G.applyFx(s, { exp: real });
@@ -213,7 +223,7 @@
     // ケガ判定
     let risk = (t.risky ? 0.035 : 0.004) + Math.max(0, 30 - p.stamina) * 0.004;
     if (p.skills.includes('durable')) risk *= 0.5;
-    risk *= G.injuryMul(s);
+    risk *= G.filter('injuryMul', 1, s);
     if (G.chance(risk)) {
       const inj = G.injure(s);
       msg += `\nしまった！${inj.name}でケガをしてしまった…（全治${inj.weeks}週）`;
@@ -262,7 +272,7 @@
   };
 
   // ---------- 週の処理 ----------
-  G.endWeek = (s, gw) => {
+  const endWeekCore = (s, gw) => {
     const p = s.player;
     const phase = G.phaseOf(s.week, s.year).id;
     const ov = G.overall(p);
@@ -347,6 +357,12 @@
     s.week++;
     if (s.week > 52) G.newYear(s);
   };
+  // 週の終わりの合図（週が進んだあと。date はその週の日曜日）
+  G.endWeek = (s, gw) => {
+    const date = G.weekDate(s, 6);
+    endWeekCore(s, gw);
+    G.emit('week:after', s, date);
+  };
 
   G.queueEvent = (s, ev) => {
     s.flags.lastEvent = ev.id;
@@ -360,7 +376,7 @@
     }
   };
 
-  G.weekSeason = (s, gw) => {
+  const weekSeasonCore = (s, gw) => {
     const p = s.player;
     const before = gw.before;
     const r = { ...gw.acc, games: gw.games };
@@ -421,10 +437,14 @@
     G.farmPromotionCheck(s);
     G.refreshTrust(s);
   };
+  G.weekSeason = (s, gw) => {
+    weekSeasonCore(s, gw);
+    G.emit('season:week', s, gw);
+  };
 
 
   // ---------- 年間スケジュール ----------
-  G.scheduled = (s) => {
+  const scheduledCore = (s) => {
     const p = s.player;
     const w = s.week;
     const ov = G.overall(p);
@@ -500,6 +520,10 @@
       scene(s, `${s.year}年 終了`, `${s.year}年が終わる。\n\n${G.seasonSummaryText(s)}\n\n来年はもっと活躍するぞ！`);
     }
   };
+  G.scheduled = (s) => {
+    scheduledCore(s);
+    G.emit('scheduled', s);
+  };
 
   G.seasonSummaryText = (s) => {
     const p = s.player;
@@ -513,7 +537,7 @@
     return `1軍成績：${st.g}試合 打率${G.fmtRate(st.h, st.ab)} ${st.hr}本塁打 ${st.rbi}打点 ${st.sb}盗塁`;
   };
 
-  G.seasonEnd = (s) => {
+  const seasonEndCore = (s) => {
     const p = s.player;
     const league = G.teamById(p.teamId).league;
     const ranking = G.leagueRanking(s, league);
@@ -558,6 +582,10 @@
     }
     scene(s, 'シーズン終了', text, rank === 1 ? { big: 'リーグ優勝' } : won.length ? { big: won[0] } : {});
     log(s, `シーズン終了：チームは${rank}位`, 'team');
+  };
+  G.seasonEnd = (s) => {
+    seasonEndCore(s);
+    G.emit('seasonEnd', s);
   };
 
   G.climaxSeries = (s) => {
@@ -670,7 +698,7 @@
     for (const t of won) log(s, `${t}を受賞！`, 'good');
   };
 
-  G.releaseCheck = (s) => {
+  const releaseCheckCore = (s) => {
     const p = s.player;
     s.flags.releasedThisYear = false;
     const ov = G.overall(p);
@@ -689,6 +717,10 @@
       title: '戦力外通告',
       text: `球団事務所に呼び出された。\n\n「…${p.name}君、来季の契約は結ばないことになった」\n\n戦力外通告を受けてしまった…。`,
     });
+  };
+  G.releaseCheck = (s) => {
+    if (G.blocked('releaseCheck', s)) return;
+    releaseCheckCore(s);
   };
 
   G.faCheck = (s) => {
@@ -713,7 +745,8 @@
     const p = s.player;
     const war = G.seasonWAR(p, s);
     const titles = s.titles.filter((t) => t.year === s.year).length;
-    let target = 600 + Math.pow(Math.max(0, war), 1.3) * 4000 + titles * 800 + p.popularity * 10;
+    // 日本球界の相場：WAR5で2〜3億円、MVP級で4〜6億円。最高でも7億円ほど
+    let target = Math.min(70000, 600 + Math.pow(Math.max(0, war), 1.25) * 3000 + titles * 800 + p.popularity * 10);
     if (s.flags.pennant === s.year && p.squad === 'first') target += 500;
     const cur = p.salary;
     let next;
@@ -723,7 +756,7 @@
     return next;
   };
 
-  G.contractScene = (s) => {
+  const contractSceneCore = (s) => {
     const p = s.player;
     if (p.age >= 44) {
       s.queue.push({ kind: 'forced_retire', title: '現役引退', text: `${p.age}歳。体はもう限界だ…。\n長く続けてきた現役生活に別れを告げる時が来た。` });
@@ -741,6 +774,10 @@
       canRetire: p.age >= 30,
       mlb,
     });
+  };
+  G.contractScene = (s) => {
+    if (G.blocked('contractScene', s)) return;
+    contractSceneCore(s);
   };
 
   // ---------- 選択肢つきシーンの解決 ----------
@@ -763,7 +800,7 @@
   };
 
   // 選択を処理し、結果シーン（info）に置き換える
-  G.resolveScene = (s, idx, input) => {
+  const resolveSceneCore = (s, idx, input) => {
     const q = s.queue.shift();
     const p = s.player;
     let title = q.title;
@@ -846,6 +883,10 @@
     }
     s.queue.unshift({ kind: 'info', title, text });
   };
+  G.resolveScene = (s, idx, input) => {
+    resolveSceneCore(s, idx, input);
+    G.emit('scene:resolved', s);
+  };
 
   G.dismissScene = (s) => {
     s.queue.shift();
@@ -924,7 +965,7 @@
 
   // ---------- 引退・エンディング ----------
   // 引退を決めたら、第二の人生を選んでエンディングへ
-  G.retire = (s, reason) => {
+  const retireCore = (s, reason) => {
     const p = s.player;
     G.pushCareer(s);
     s.retired = { reason, age: p.age, years: p.yearsPro + 1 };
@@ -940,8 +981,12 @@
     });
     log(s, `${reason}（${p.age}歳）`, 'year');
   };
+  G.retire = (s, reason) => {
+    retireCore(s, reason);
+    G.emit('retire', s, reason);
+  };
 
-  G.finishLife = (s, careerId) => {
+  const finishLifeCore = (s, careerId) => {
     const p = s.player;
     const tot = G.careerTotals(s);
     const pitcher = G.isPitcher(p);
@@ -969,6 +1014,10 @@
     s.ended = true;
     s.queue = [];
   };
+  G.finishLife = (s, careerId) => {
+    finishLifeCore(s, careerId);
+    G.emit('finishLife', s, careerId);
+  };
 
   // ---------- セーブ／ロード ----------
   G.SAVE_KEY = 'pawa-mylife-saves-v1';
@@ -994,6 +1043,31 @@
     } catch (e) {
       return false;
     }
+  };
+
+  // ---------- セーブデータの書き出し・読み込み ----------
+  G.SAVE_FORMAT = 1;
+  G.exportSave = (s) => JSON.stringify({ app: 'diamond-life', format: G.SAVE_FORMAT, exportedAt: new Date().toISOString(), save: s });
+
+  // 書き出したテキスト（またはセーブデータそのもの）を読み込む。おかしければ理由つきでエラー
+  G.importSave = (text) => {
+    let data;
+    try {
+      data = JSON.parse(String(text || '').trim());
+    } catch (e) {
+      throw new Error('セーブデータの形式ではありません（テキストが途中で切れていないか確認してください）');
+    }
+    const s = data && data.app === 'diamond-life' ? data.save : data;
+    const p = s && s.player;
+    if (!p || typeof p.name !== 'string' || !Number.isFinite(s.year) || !Number.isFinite(s.week) || !Array.isArray(s.career) || !Array.isArray(s.queue)) {
+      throw new Error('ダイヤモンド・ライフのセーブデータではないようです');
+    }
+    return G.migrate(s);
+  };
+
+  G.saveToSlot = (s, i) => {
+    s.slot = i;
+    return G.saveGame(s);
   };
 
   G.deleteSlot = (i) => {

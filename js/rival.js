@@ -9,7 +9,7 @@
   };
   const SPOTS = ['グアム', '沖縄・宮古島', '鹿児島・徳之島', 'ハワイ', '地元の室内練習場'];
 
-  G.canJointTrain = (s, who) => {
+  const canJointTrainCore = (s, who) => {
     if (s.after || s.retired) return '現役のときだけ';
     const ph = G.phaseOf(s.week, s.year).id;
     if (!['jan', 'off'].includes(ph)) return '1月・12月の自主トレ期間だけ';
@@ -19,6 +19,7 @@
     if (who === 'rival' && x.aff < 30) return 'ライバルとの仲30以上';
     return '';
   };
+  G.canJointTrain = (s, who) => G.filter('canJointTrain', canJointTrainCore(s, who), s, who);
 
   // 教えてもらえる特殊能力（人ごとに決まっている）
   const teachSkill = (s, who) => {
@@ -90,9 +91,7 @@
   const rivalPick = (s) => (s.draft ? s.draft.picks.find((d) => d.id === s.draft.rivalId) : null);
 
   // ライバルが同じリーグの主力なら、タイトル争いの相手になる
-  const origLeaders = G.genLeaders;
-  G.genLeaders = (s) => {
-    origLeaders(s);
+  G.on('leaders', (s) => {
     s.race = {};
     s.flags.rivalCat = null;
     const p = s.player;
@@ -110,7 +109,7 @@
     L.team = G.teamById(rv.teamId).short;
     L.rival = true;
     s.flags.rivalCat = cat;
-  };
+  });
 
   const myValue = (s, cat) => {
     const p = s.player;
@@ -191,16 +190,12 @@
     if (parts.length) G.log(s, `【タイトル争い】${parts.join('　')}`, 'team', 'game');
   };
 
-  const origWeekSeason = G.weekSeason;
-  G.weekSeason = (s, gw) => {
-    origWeekSeason(s, gw);
+  G.on('season:week', (s, gw) => {
     G.raceWeek(s);
-  };
+  });
 
   // シーズン終了：ライバルとの争いの決着
-  const origSeasonEnd = G.seasonEnd;
-  G.seasonEnd = (s) => {
-    origSeasonEnd(s);
+  G.on('seasonEnd', (s) => {
     const cat = s.flags.rivalCat;
     if (!cat || !s.race || !s.race[cat]) return;
     const p = s.player;
@@ -219,5 +214,5 @@
       s.story.raceLost = (s.story.raceLost || 0) + 1;
       G.scene(s, '同期対決、決着', `${title}のタイトルは、同期のライバル・${o.name}の手に渡った。\n\n${o.name}「来年もこうやって競い合おうぜ。お前がいると燃えるんだ」\n\n悔しさが、次のシーズンへの力になる。` + G.applyFx(s, { aff: { rival: 5 }, exp: { mind: 30 } }));
     }
-  };
+  });
 })();

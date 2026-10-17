@@ -89,14 +89,12 @@
     museum: (s) => `ふるさとに「${fam(s)}記念館」を建てた`,
     owner: (s) => `${G.teamById(ownerTeam(s)).name}を買収し、球団オーナーに就任した`,
   };
-  const origBuy = G.buyInvestment;
-  G.buyInvestment = (s, id) => {
+  G.on('invest:beforeBuy', (s, id) => {
     const inv = G.INVESTMENTS.find((x) => x.id === id);
     const lv = inv && inv.levels[G.invLv(s, id)];
     if (lv && lv.nameFn) lv.name = lv.nameFn(s);
     if (lv && VERBS[id]) lv.verb = VERBS[id](s);
-    return origBuy(s, id);
-  };
+  });
   G.investLevelName = (s, lv) => (lv.nameFn ? lv.nameFn(s) : lv.name);
 
   // 買収する球団：最後に所属していた日本の球団
@@ -109,29 +107,24 @@
 
   // 財団：毎年の活動
   const PROJECTS = ['全国10か所で無料の野球教室を開いた', '小児病棟を訪問し、子どもたちとキャッチボールをした', '被災地の少年野球チームに用具を贈った', '野球を続けたい中高生10人に奨学金を出した', '障がいのある子どもたちの野球大会を開いた'];
-  const origYearly = G.yearlyLife;
-  G.yearlyLife = (s) => {
-    origYearly(s);
+  G.on('year:life', (s) => {
     if (G.invLv(s, 'foundation')) {
       s.player.popularity = G.clamp(s.player.popularity + 1, 0, 100);
       G.addHappy(s, 4);
       G.scene(s, '財団の1年', `${fam(s)}スポーツ財団は、昨年${G.pick(PROJECTS)}。\n届いた子どもたちからの手紙を、一通ずつ読み返した。`);
     }
-  };
+  });
 
   // 記念館：引退後の入館料
-  const origIncome = G.afterIncome;
-  G.afterIncome = (s) => origIncome(s) + (G.invLv(s, 'museum') ? 15 : 0);
+  G.on('afterIncome', (inc, s) => inc + (G.invLv(s, 'museum') ? 15 : 0));
 
   // 球団オーナー：毎年の補強方針と収支
-  const origAfterNewYear = G.afterNewYear;
-  G.afterNewYear = (s) => {
-    origAfterNewYear(s);
+  G.on('after:newYear', (s) => {
     if (s.owner && !s.ended) {
       const team = G.teamById(s.owner.teamId);
       s.queue.push({ kind: 'life', id: 'owner_plan', title: 'オーナー会議', text: `${team.name}の今季の補強方針を決める。\n昨季の成績：${s.owner.lastRank ? `${s.owner.lastRank}位` : '—'}`, data: {} });
     }
-  };
+  });
   G.LIFE_SCENES.owner_plan = {
     choices: (s) => {
       const tid = s.owner.teamId;
@@ -143,9 +136,7 @@
       ];
     },
   };
-  const origAfterSeasonEnd = G.afterSeasonEnd;
-  G.afterSeasonEnd = (s) => {
-    origAfterSeasonEnd(s);
+  G.on('after:seasonEnd', (s) => {
     if (!s.owner) return;
     const tid = s.owner.teamId;
     const team = G.teamById(tid);
@@ -166,7 +157,7 @@
       G.addHappy(s, 10);
     }
     G.scene(s, 'オーナーとしての1年', text, rank === 1 ? { big: 'オーナーとして優勝' } : {});
-  };
+  });
 
   // ================= 記録達成のセレモニー・名球会 =================
   const MILESTONES = {
@@ -240,23 +231,19 @@
     }
   };
 
-  const origCheck = G.checkAch;
-  G.checkAch = (s, x = {}) => {
-    if (s && s.player && !s.ended && !s.flags.ms) G.milestoneCheck(s, true); // 古いセーブは今までの分を記念式なしで記録
-    if (s && s.player && x.game && !s.ended) G.milestoneCheck(s, false);
-    origCheck(s, x);
-  };
+  G.on('ach:before', (s, x) => {
+    if (!s.flags.ms) G.milestoneCheck(s, true); // 古いセーブは今までの分を記念式なしで記録
+    if (x.game) G.milestoneCheck(s, false);
+  });
 
   // 名球会のブレザー贈呈（その年の表彰式の頃）
-  const origScheduled = G.scheduled;
-  G.scheduled = (s) => {
-    origScheduled(s);
+  G.on('scheduled', (s) => {
     if (s.flags.meikyuYear === s.year && s.week === G.cal(s.year).awardsW && !s.flags.blazer) {
       s.flags.blazer = s.year;
       s.history.push({ year: s.year, text: '名球会のブレザーを授与される' });
       G.scene(s, '名球会ブレザー贈呈式', `名球会の総会で、えんじ色のブレザーが贈られた。\n袖を通すと、先輩たちから大きな拍手が起こった。\n「これからは、球界の顔としての振る舞いも求められるぞ」\n\nこのブレザーは、記録を残した者だけが着られる。`, { big: '名球会ブレザー' });
     }
-  };
+  });
 
   // ================= 引退のセレモニー =================
   G.isMeikyu = (s) => {
@@ -268,9 +255,7 @@
     return { war, ok: war >= 50 || (G.isMeikyu(s) && war >= 35) || (war >= 40 && s.titles.length >= 8), strong: war >= 60 || (G.isMeikyu(s) && war >= 45) };
   };
 
-  const origRetire = G.retire;
-  G.retire = (s, reason) => {
-    origRetire(s, reason);
+  G.on('retire', (s, reason) => {
     const p = s.player;
     s.retired.year = s.year;
     const tot = G.careerTotals(s);
@@ -314,13 +299,11 @@
     }
     if (G.isMeikyu(s)) scenes.push({ kind: 'info', title: '名球会の仲間たち', text: `名球会の先輩たちから、引退をねぎらうメッセージが次々と届いた。\n「お疲れさん。これからは、グラウンドの外から野球を盛り上げていこう」` });
     if (scenes.length) s.queue.unshift(...scenes);
-  };
+  });
 
   // ================= 野球殿堂 =================
   // 引退から5年たつと候補に。実績があれば投票で選ばれる（第二の人生を続けている場合）
-  const origAfterNY2 = G.afterNewYear;
-  G.afterNewYear = (s) => {
-    origAfterNY2(s);
+  G.on('after:newYear', (s) => {
     if (!s.retired || s.flags.hall || s.ended) return;
     const yrs = s.year - (s.retired.year || s.year);
     if (yrs < 5 || yrs > 20) return;
@@ -346,7 +329,7 @@
       text: `${G.fmtDate(`${s.year}-01-15`, false)}、野球殿堂博物館で殿堂入りが発表された。\n\n「${expert ? 'エキスパート表彰' : 'プレーヤー表彰'}——${s.player.name}」\n\n自分の顔が刻まれたレリーフが、歴代の名選手たちの隣に並ぶ。\n表彰式のスピーチで、何を語ろう？`,
       data: {},
     });
-  };
+  });
   G.LIFE_SCENES.hall_speech = {
     choices: (s) => {
       const p = s.player;
@@ -360,9 +343,7 @@
   };
 
   // ================= エンディングに残す称号 =================
-  const origFinish = G.finishLife;
-  G.finishLife = (s, careerId) => {
-    origFinish(s, careerId);
+  G.on('finishLife', (s, careerId) => {
     const e = s.ending;
     if (!e) return;
     const p = s.player;
@@ -381,5 +362,5 @@
     // 殿堂の判定は実際の結果を優先
     if (s.after) e.hall = !!s.flags.hall;
     void p;
-  };
+  });
 })();

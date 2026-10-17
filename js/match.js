@@ -148,7 +148,7 @@
     runs.map((r, i) => `${startInning + i}回：${r === 0 ? G.pick(['三者凡退', '無失点', 'ピンチをしのぐ', '0点に抑える']) : `${r}失点`}`);
 
   // ---------- 1試合の準備（出場するか・相手の特徴） ----------
-  G.prepareOwnGame = (s, oppId) => {
+  const prepareOwnGameCore = (s, oppId) => {
     const p = s.player;
     const myStr = G.teamStrength(s, p.teamId) + G.playerTeamBonus(s);
     const oppStr = G.teamStrength(s, oppId);
@@ -199,9 +199,14 @@
     }
     return ctx;
   };
+  G.prepareOwnGame = (s, oppId) => {
+    const ctx = prepareOwnGameCore(s, oppId);
+    G.emit('ownGame:prepare', s, ctx);
+    return ctx;
+  };
 
   // ---------- 1試合の実行 ----------
-  G.executeOwnGame = (s, ctx, apId, clutchId) => {
+  const executeOwnGameCore = (s, ctx, apId, clutchId) => {
     const p = s.player;
     const { oppId, myStr, oppStr } = ctx;
     let pWin = G.clamp(0.5 + (myStr - oppStr) * 0.012, 0.25, 0.75);
@@ -348,6 +353,11 @@
     }
     res.outcome = outcome;
     res.score = score;
+    return res;
+  };
+  G.executeOwnGame = (s, ctx, apId, clutchId) => {
+    const res = executeOwnGameCore(s, ctx, apId, clutchId);
+    G.emit('ownGame:result', s, ctx, res);
     return res;
   };
 

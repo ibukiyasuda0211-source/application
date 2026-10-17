@@ -61,21 +61,17 @@
   };
 
   // ---------- 自主トレは誘われてから ----------
-  const origCan = G.canJointTrain;
-  G.canJointTrain = (s, who) => {
-    const r = origCan(s, who);
+  G.on('canJointTrain', (r, s, who) => {
     if (r) return r;
     if (s.story[`jt_${who}`]) return ''; // 以前のセーブで一緒にやったことがあれば
     if (!done(s, `${who}_invite`)) return who === 'senpai' ? '先輩から誘われると解禁' : who === 'rival' ? 'ライバルから誘われると解禁' : '後輩から頼まれると解禁';
     return '';
-  };
+  });
 
   const lifeScene = (s, id, title, text, data = {}) => s.queue.push({ kind: 'life', id, title, text, data });
 
   // ---------- 毎週の判定 ----------
-  const origStories = G.checkStories;
-  G.checkStories = (s) => {
-    origStories(s);
+  G.on('stories', (s) => {
     for (const who in G.CHAINS) G.chainState(s, who); // すでに起きた出来事をつながりとして記録
     const p = s.player;
     const P = s.people;
@@ -128,19 +124,17 @@
     if (P.reporter.met && !done(s, 'reporter_column') && !s.story.reporter_column_no && aff(s, 'reporter') >= 70 && p.popularity >= 30 && G.chance(0.05)) {
       lifeScene(s, 'chain_column', 'コラム連載の依頼', `担当記者の${P.reporter.name}さんから相談された。\n「うちの新聞で、${p.name.split(' ')[0]}さんの連載コラムを始めませんか？ 野球のこと、日々のこと、自由に書いてほしいんです」`);
     }
-  };
+  });
 
   // 親友の店の配当（毎年）・コラムの反響
-  const origYearly = G.yearlyLife;
-  G.yearlyLife = (s) => {
-    origYearly(s);
+  G.on('year:life', (s) => {
     if (done(s, 'friend_partner')) {
       const d = G.ri(100, 400);
       s.player.money += d;
       G.scene(s, '親友の店', `${s.people.friend.name}の店は今年も繁盛している。\n共同出資者として、${G.fmtMoney(d)}の配当を受け取った。「次は2号店だな！」`);
     }
     if (done(s, 'reporter_column')) s.player.popularity = G.clamp(s.player.popularity + 1, 0, 100);
-  };
+  });
 
   // ---------- 選択つきの場面 ----------
   Object.assign(G.LIFE_SCENES, {
@@ -181,9 +175,7 @@
   });
 
   // ---------- 引退のとき：ライバルとの夢 ----------
-  const origRetire = G.retire;
-  G.retire = (s, reason) => {
-    origRetire(s, reason);
+  G.on('retire', (s, reason) => {
     const r = s.people.rival;
     if (!done(s, 'rival_academy') && aff(s, 'rival') >= 65) {
       const idx = s.queue.findIndex((q) => q.id === 'second_career');
@@ -196,7 +188,7 @@
       };
       if (idx >= 0) s.queue.splice(idx, 0, scene);
     }
-  };
+  });
 
   // ---------- 第二の人生への影響 ----------
   const careerById = (id) => G.SECOND_CAREERS.find((c) => c.id === id);
@@ -210,9 +202,7 @@
   patch('business', (s) => done(s, 'friend_partner'));
   patch('commentator', (s) => done(s, 'reporter_column'));
 
-  const origStart = G.startAfterLife;
-  G.startAfterLife = (s, careerId) => {
-    origStart(s, careerId);
+  G.on('after:start', (s, careerId) => {
     const a = s.after;
     if (!a) return;
     const P = s.people;
@@ -254,5 +244,5 @@
       lines.push(`同期の${P.rival.name}と共同で立ち上げたアカデミー。ふたりの名前に惹かれて、たくさんの子どもたちが集まった。`);
     }
     if (lines.length) G.scene(s, 'つながりが生んだ縁', lines.join('\n\n'), { big: '縁' });
-  };
+  });
 })();

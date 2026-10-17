@@ -85,7 +85,7 @@
   G.afterDef = (s) => G.AFTER_CAREERS[s.after.career];
   G.afterRank = (s) => G.afterDef(s).ranks(s)[s.after.level];
 
-  G.startAfterLife = (s, careerId) => {
+  const startAfterLifeCore = (s, careerId) => {
     const p = s.player;
     s.after = { career: careerId, level: 0, xp: 0, startAge: p.age, startYear: s.year, titles: [], data: {} };
     s.retired = s.retired || { reason: '現役を引退した', age: p.age, years: p.yearsPro + 1 };
@@ -93,6 +93,10 @@
     s.queue = [];
     G.scene(s, '新しい人生', `${G.afterRank(s)}としての毎日が始まる。\n\n毎週「仕事」と「オフの過ごし方」を選んで、引退後の人生を歩もう。家族や仲間との時間も、まだまだこれから。\n（「人生」タブからいつでも物語を締めくくれます）`);
     G.log(s, `第二の人生：${G.afterRank(s)}`, 'year');
+  };
+  G.startAfterLife = (s, careerId) => {
+    startAfterLifeCore(s, careerId);
+    G.emit('after:start', s, careerId);
   };
 
   G.afterWorks = (s) =>
@@ -122,16 +126,17 @@
     }
   };
 
-  G.afterIncome = (s) => {
+  const afterIncomeCore = (s) => {
     const a = A(s);
     if (a.career === 'business') return Math.round((a.data.shops || 1) * ((a.data.rep || 40) - 35) * 1.5);
     let inc = G.afterDef(s).income[a.level];
     if (a.career === 'commentator' || a.career === 'talent') inc += Math.round(s.player.popularity * 0.3);
     return inc;
   };
+  G.afterIncome = (s) => G.filter('afterIncome', afterIncomeCore(s), s);
 
   // 引退後の1週間
-  G.doAfterWeek = (s, workId, privId) => {
+  const doAfterWeekCore = (s, workId, privId) => {
     const p = s.player;
     const w = G.afterDef(s).works.find((x) => x.id === workId) || G.afterDef(s).works[0];
     const msgs = [w.run(s)];
@@ -151,6 +156,11 @@
     s.week++;
     if (s.week > 52) G.afterNewYear(s);
   };
+  G.doAfterWeek = (s, workId, privId) => {
+    const date = G.weekDate(s, 6);
+    doAfterWeekCore(s, workId, privId);
+    G.emit('after:week', s, date);
+  };
 
   G.simLeagueWeek = (s) => {
     const boost = s.after && s.after.career === 'coach' ? s.after.level + 1 : 0;
@@ -167,7 +177,7 @@
     }
   };
 
-  G.afterSeasonEnd = (s) => {
+  const afterSeasonEndCore = (s) => {
     const a = A(s);
     const p = s.player;
     if (a.career !== 'coach') return;
@@ -188,8 +198,12 @@
     }
     G.scene(s, 'シーズン終了', text, rank === 1 ? { big: 'リーグ優勝' } : {});
   };
+  G.afterSeasonEnd = (s) => {
+    afterSeasonEndCore(s);
+    G.emit('after:seasonEnd', s);
+  };
 
-  G.afterNewYear = (s) => {
+  const afterNewYearCore = (s) => {
     const p = s.player;
     const a = A(s);
     G.updateDraftClass(s);
@@ -231,6 +245,10 @@
     if (p.age >= 80) {
       s.queue.push({ kind: 'life', id: 'life_end', title: '人生の幕', text: `${p.age}歳。野球と共に歩んだ人生を、静かに振り返る。\n\nたくさんの人に支えられた、かけがえのない日々だった。`, data: {} });
     }
+  };
+  G.afterNewYear = (s) => {
+    afterNewYearCore(s);
+    G.emit('after:newYear', s);
   };
 
   G.AFTER_EVENTS = [
