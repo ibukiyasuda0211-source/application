@@ -2444,3 +2444,13 @@ h3 {
   flex-wrap: wrap;
   gap: 6px;
 }
+
+.up-note {
+  font-size: 12px;
+  margin: 4px 0 0;
+}
+.up-table .wall {
+  font-size: 10px;
+  color: #c0392b;
+  font-weight: bold;
+}

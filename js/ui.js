@@ -615,7 +615,8 @@
         const cost = G.abilityCost(a, v, p);
         const ok = !max && G.canAfford(p, cost);
         const disp = a.id === 'velocity' ? `<span class="velo">${v}km/h</span>` : `${rankBadge(v)} ${v}`;
-        return `<tr><td class="nm">${a.name}</td><td><div class="vcell">${disp}</div></td>
+        const wall = !max && G.overCeiling(p, a.id, v) ? '<div class="wall">素質の壁</div>' : '';
+        return `<tr><td class="nm">${a.name}${wall}</td><td><div class="vcell">${disp}</div></td>
           <td class="cost">${max ? 'MAX' : costHtml(p, cost)}</td>
           <td class="ops"><button class="btn small" data-act="raise" data-arg="${a.id}" ${ok ? '' : 'disabled'}>＋1</button>
           <button class="btn small sub" data-act="raise5" data-arg="${a.id}" ${ok ? '' : 'disabled'}>＋5</button></td></tr>`;
@@ -658,6 +659,7 @@
 
     return `<div class="panel">
       <h3>経験点</h3><div class="exp-chips">${chips}</div>
+      <p class="muted up-note">経験点はそれぞれ${G.EXP_CAP}まで。「素質の壁」に届いた能力は、上げるのに何倍もの経験点がいる</p>
       <h3>基礎能力</h3><table class="up-table">${rows}</table>
       ${pitchHtml}
       <h3 class="mt">特殊能力</h3><div class="skill-list">${skills}</div>
@@ -1589,15 +1591,31 @@
   };
 
   // ---------- セーブの書き出し・読み込み ----------
+  // ファイルとして保存する。claude.ai の中では保存の確認画面を通し、それ以外では普通にダウンロードする
+  const saveFile = async (filename, text) => {
+    const dl = window.claude && window.claude.use ? await window.claude.use('downloads') : null;
+    if (dl) {
+      await dl.save({ filename, data: text });
+      return;
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  };
+
   const ioModal = () => {
     const io = ui.io;
     if (io.mode === 'export') {
       return `<div class="modal-back"><div class="modal io-modal" role="dialog" aria-modal="true">
         <div class="modal-title">スロット${io.slot + 1}を書き出す</div>
-        <div class="modal-text">${io.downloaded ? 'ファイル（.json）を保存しました。' : ''}ファイルの保存がうまくいかないときは、下のテキストをすべてコピーして、メモ帳などに貼り付けて保管してください。</div>
+        <div class="modal-text">${io.downloaded ? '<b>ファイル（.json）を保存しました。</b><br>' : '「ファイルに保存」で .json ファイルとして保存できます。<br>'}うまくいかないときは、下のテキストをすべてコピーして、メモ帳などに貼り付けて保管してください。</div>
         <textarea id="ioText" class="io-text" readonly>${esc(io.text)}</textarea>
         <div class="muted" style="font-size:12px">${Math.round(io.text.length / 1024)}KB</div>
-        <div class="modal-choices"><button class="btn" data-act="ioCopy">テキストをコピー</button><button class="btn sub" data-act="ioClose">閉じる</button></div>
+        <div class="modal-choices"><button class="btn" data-act="ioSave">ファイルに保存</button><button class="btn sub" data-act="ioCopy">テキストをコピー</button><button class="btn sub" data-act="ioClose">閉じる</button></div>
       </div></div>`;
     }
     return `<div class="modal-back"><div class="modal io-modal" role="dialog" aria-modal="true">
@@ -1675,22 +1693,20 @@
       const s = G.loadAll()[i];
       if (!s) return;
       const text = G.exportSave(s);
-      let downloaded = false;
-      try {
-        const blob = new Blob([text], { type: 'application/json' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `diamond-life_${s.player.name.replace(/\s+/g, '')}_${s.year}.json`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-        downloaded = true;
-      } catch (e) {
-        downloaded = false;
-      }
-      ui.io = { mode: 'export', slot: i, text, downloaded };
+      const filename = `diamond-life_slot${i + 1}_${s.year}.json`; // 日本語のファイル名は環境によって崩れるので英数字だけ
+      ui.io = { mode: 'export', slot: i, text, filename, downloaded: false };
       render();
+    },
+    ioSave: () => {
+      const io = ui.io;
+      if (!io || io.mode !== 'export') return;
+      saveFile(io.filename, io.text).then(
+        () => {
+          io.downloaded = true;
+          render();
+        },
+        (e) => toast(e && e.code === 'declined' ? '保存をやめました' : 'ファイルに保存できませんでした。テキストをコピーして保管してください'),
+      );
     },
     importSlot: (arg) => {
       ui.io = { mode: 'import', slot: Number(arg), text: '', error: '' };

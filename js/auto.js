@@ -127,7 +127,26 @@
       }
       if (!done) break;
     }
+    // 余った経験点で、役に立つ特殊能力を覚える
+    for (const id of autoSkillOrder(p)) {
+      if (!p.skills.includes(id) && G.learnSkill(p, id)) n++;
+    }
     return n;
+  };
+  const autoSkillOrder = (p) => {
+    if (G.isPitcher(p)) return ['pinch', 'kire', 'nobi', 'heavy', 'durable', ...(p.role === 'SP' ? ['quick'] : []), 'kkk', 'recover'];
+    const b = p.batter;
+    return [
+      b.contact >= b.power ? 'avg' : 'powerhit',
+      'chance',
+      'eye',
+      'tough',
+      'durable',
+      ...(p.position !== '1B' ? ['glove'] : []),
+      ...(b.speed >= 60 ? ['steal'] : []),
+      b.contact >= b.power ? 'powerhit' : 'avg',
+      'recover',
+    ];
   };
 
   // ---------- 進める先 ----------

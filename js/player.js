@@ -72,7 +72,7 @@
       background: bg.id,
       growth,
       talent: G.rf(0.92, 1.12),
-      ceiling: G.clamp(Math.round(G.gauss(64, 8)), 50, 92), // 素質（ここを超えると伸びにくい）
+      ceiling: G.clamp(Math.round(G.gauss(61, 8)), 45, 90), // 素質（ここを超えると伸びにくい）
       age: bg.age,
       birthday: G.randomBirthday(),
       condition: 2,
@@ -289,8 +289,8 @@
 
   // 年を取ったときの衰え
   // 年齢による衰えの重み（体の能力ほど落ちやすい）
-  G.AGING_WEIGHT = { power: 1.25, speed: 1.4, arm: 1.2, fielding: 1.0, contact: 0.6, catching: 0.6, velocity: 1.3, stamina: 1.3, control: 0.55 };
-  G.AGING_START = { early: 29, normal: 32, late: 34 };
+  G.AGING_WEIGHT = { power: 1.25, speed: 1.4, arm: 1.2, fielding: 1.0, contact: 0.85, catching: 0.8, velocity: 1.3, stamina: 1.3, control: 0.75 };
+  G.AGING_START = { early: 28, normal: 31, late: 33 };
 
   // 年齢による経験点の倍率：若いうちは体が伸び、ベテランになると技術と精神が伸びる
   G.ageExpMul = (p, k, age = p.age) => {
@@ -298,7 +298,7 @@
     const phys = k === 'muscle' || k === 'agility';
     if (age <= 22 && phys) return 1.1;
     if (t <= 0) return 1;
-    return phys ? Math.max(0.55, 1 - t * 0.045) : Math.min(1.6, 1 + t * 0.06);
+    return phys ? Math.max(0.55, 1 - t * 0.045) : Math.min(1.45, 1 + t * 0.05);
   };
 
   G.applyAging = (p) => {

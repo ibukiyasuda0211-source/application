@@ -158,10 +158,15 @@
     if (!G.isPitcher(p)) {
       const u = G.ensureUsage(s);
       const regular = u.status === 'starter' && u.slot;
+      const rest = regular && p.age >= 33 && G.chance(Math.min(0.15, (p.age - 32) * 0.025)); // ベテランはときどき休養日
       const spot = !regular && G.chance(0.12);
-      const starter = regular || spot;
+      const starter = (regular && !rest) || spot;
       const slot = regular ? u.slot : spot ? (p.position === 'C' ? 8 : G.pick([7, 8])) : null;
-      const nPA = starter ? (G.chance(slot <= 3 ? 0.55 : slot >= 7 ? 0.3 : 0.45) ? 5 : 4) : G.chance(0.35) ? 1 : 0;
+      // 打順が下がるほど打席は少ない（1・2番は4.6、クリーンアップは4.3、下位は4.0打席くらい）
+      const paTop = () => (G.chance(0.6) ? 5 : 4);
+      const paMid = () => (G.chance(0.3) ? 5 : 4);
+      const paLow = () => (G.chance(0.15) ? 3 : G.chance(0.12) ? 5 : 4);
+      const nPA = starter ? (slot <= 2 ? paTop() : slot <= 5 ? paMid() : paLow()) : G.chance(0.35) ? 1 : 0;
       const oppP = { name: G.randomMaleName(), type: G.pick(G.OPP_PITCHERS).id };
       if (nPA) {
         Object.assign(ctx, { kind: 'bat', nPA, starter, order: starter ? `${slot}番${spot ? '（休養日の代役）' : ''}` : '代打', oppP });

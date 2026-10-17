@@ -2,7 +2,7 @@
 (function () {
   const G = window.G;
 
-  G.TRAIN_EXP_SCALE = 0.65; // 練習でもらえる経験点の全体の量（バランス調整用）
+  G.TRAIN_EXP_SCALE = 0.6; // 練習でもらえる経験点の全体の量（バランス調整用）
   G.PHASE_MUL = { jan: 1.0, camp: 1.4, open: 1.0, season: 0.55, post: 0.7, fall: 1.25, off: 0.85 };
   G.COND_TRAIN_MUL = [0.75, 0.9, 1.0, 1.1, 1.25];
 

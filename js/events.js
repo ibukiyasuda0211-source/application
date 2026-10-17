@@ -93,14 +93,15 @@
     {
       id: 'coach_advice_b',
       weight: 5,
-      cond: (s) => !isP(s),
+      cond: (s) => !isP(s) && !(s.story.formYear > s.year - 3), // フォーム改造の話は3年に一度
       title: 'コーチのアドバイス',
       text: (s) => `打撃コーチの${coach(s)}さんが声をかけてきた。「お前、ちょっと構えを見直してみないか？」`,
       choices: [
         {
           label: 'フォームを改造する',
           run: (s) => {
-            if (G.chance(0.6)) return 'フォーム改造が大成功！打球が見違えるようになった！' + G.applyFx(s, { ability: { contact: G.ri(2, 4) } });
+            s.story.formYear = s.year;
+            if (G.chance(0.6)) return 'フォーム改造が大成功！打球が見違えるようになった！' + G.applyFx(s, { ability: { contact: G.ri(1, 3) } });
             return 'しっくりこない…元に戻すのに苦労した。' + G.applyFx(s, { cond: -1, exp: { mind: 10 } });
           },
         },
@@ -110,13 +111,14 @@
     {
       id: 'coach_advice_p',
       weight: 5,
-      cond: (s) => isP(s),
+      cond: (s) => isP(s) && !(s.story.formYear > s.year - 3),
       title: '投手コーチのアドバイス',
       text: (s) => `投手コーチの${coach(s)}さん「腕の振りをもう少し鋭くしてみろ。球にキレが出るぞ」`,
       choices: [
         {
           label: '試してみる',
           run: (s) => {
+            s.story.formYear = s.year;
             if (G.chance(0.55)) return 'ボールが走るようになった！' + G.applyFx(s, { ability: { velocity: G.ri(1, 2) } });
             return 'コントロールが乱れてしまった…' + G.applyFx(s, { cond: -1, exp: { technique: 10 } });
           },
@@ -215,12 +217,13 @@
     {
       id: 'veteran_skill',
       weight: 2,
-      cond: (s) => G.availableSkills(P(s)).some((sk) => !P(s).skills.includes(sk.id)),
+      cond: (s) => !s.story.vetSkill && G.availableSkills(P(s)).some((sk) => !P(s).skills.includes(sk.id)),
       title: 'ベテランの極意',
       text: (s) => `大ベテランの${senpai(s)}さんが「お前には特別に教えてやろう」と秘伝のコツを伝授してくれた。`,
       run: (s) => {
         const pool = G.availableSkills(P(s)).filter((sk) => !P(s).skills.includes(sk.id));
         const sk = G.pick(pool);
+        s.story.vetSkill = true; // 教わるのは一度きり
         return '目からウロコが落ちた！' + G.applyFx(s, { skill: sk.id });
       },
     },
