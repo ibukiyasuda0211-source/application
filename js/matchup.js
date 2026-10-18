@@ -33,7 +33,7 @@
   };
   G.parkOf = (teamId) => G.PARKS[teamId] || { name: `${G.teamById(teamId).short}の本拠地`, hr: 1 };
   G.parkLabel = (pk) => (pk.hr >= 1.1 ? '本塁打が出やすい' : pk.hr <= 0.9 ? '本塁打が出にくい' : '標準的');
-  const parkIdOf = (s, ctx) => (ctx.home ? s.player.teamId : ctx.oppId);
+  const parkIdOf = (s, ctx) => ctx.parkId || (ctx.home ? s.player.teamId : ctx.oppId);
 
   // 球場ごとの「なぜか打てる・打てない」（隠れた相性。データを見ると気づける）
   G.parkAff = (p, tid) => {
@@ -146,7 +146,7 @@
   };
 
   G.on('ownGame:result', (s, ctx, res) => {
-    if (!res || !res.kind || !res.line) return;
+    if (!res || !res.kind || !res.line || ctx.special) return; // 代表の試合はシーズンの記録に入れない
     const sp = bucket(s);
     const pit = res.kind === 'pit';
     if (!pit && !res.line.pa) return;

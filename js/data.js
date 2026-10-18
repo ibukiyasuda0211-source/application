@@ -22,7 +22,25 @@
     { id: 'okinawa', name: '沖縄シーサーズ', short: '沖縄', color: '#00a37a', league: 'dream' },
   ];
 
-  G.teamById = (id) => G.TEAMS.find((t) => t.id === id);
+  // 国際大会の代表チーム（球団の一覧には入れない）
+  G.INTL_TEAMS = [
+    { id: 'n_jpn', name: '侍ジャパン', short: '日本', color: '#10275c', league: 'intl' },
+    { id: 'n_kor', name: '韓国代表', short: '韓国', color: '#c8102e', league: 'intl', east: true },
+    { id: 'n_twn', name: '台湾代表', short: '台湾', color: '#1b4d9b', league: 'intl', east: true },
+    { id: 'n_chn', name: '中国代表', short: '中国', color: '#d62828', league: 'intl', east: true },
+    { id: 'n_aus', name: 'オーストラリア代表', short: '豪州', color: '#1f7a3d', league: 'intl' },
+    { id: 'n_cze', name: 'チェコ代表', short: 'チェコ', color: '#2b4c9b', league: 'intl' },
+    { id: 'n_ita', name: 'イタリア代表', short: '伊', color: '#1d7f4e', league: 'intl' },
+    { id: 'n_mex', name: 'メキシコ代表', short: 'メキシコ', color: '#0b6e3b', league: 'intl' },
+    { id: 'n_pur', name: 'プエルトリコ代表', short: 'PUR', color: '#b5121b', league: 'intl' },
+    { id: 'n_ned', name: 'オランダ代表', short: 'オランダ', color: '#e0662f', league: 'intl' },
+    { id: 'n_cub', name: 'キューバ代表', short: 'キューバ', color: '#0b3d91', league: 'intl' },
+    { id: 'n_ven', name: 'ベネズエラ代表', short: 'VEN', color: '#a3162f', league: 'intl' },
+    { id: 'n_dom', name: 'ドミニカ共和国代表', short: 'DOM', color: '#1c2b5a', league: 'intl' },
+    { id: 'n_usa', name: 'アメリカ代表', short: 'USA', color: '#22356b', league: 'intl' },
+  ];
+  G.intlTeamByName = (short) => G.INTL_TEAMS.find((t) => t.short === short || t.name.replace(/代表$/, '') === short);
+  G.teamById = (id) => G.TEAMS.find((t) => t.id === id) || G.INTL_TEAMS.find((t) => t.id === id);
 
   G.SURNAMES = [
     '佐藤', '鈴木', '高橋', '田中', '伊藤', '渡辺', '山本', '中村', '小林', '加藤',

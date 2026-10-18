@@ -57,7 +57,8 @@ module.exports = [
       for (let i = 0; i < 20 && s.week < d.campW; i++) oneWeek(G, s);
       if (!G.onJapanDuty(s)) fails.push('合宿の週なのに代表の活動中になっていない');
       const opts = G.trainingOptions(s).map((o) => o.id);
-      if (!opts.includes('jp_appeal') || opts.includes('batting')) fails.push(`合宿中の練習メニューがおかしい：${opts.join(',')}`);
+      if (!s.player.injury && (!opts.includes('jp_appeal') || opts.includes('batting'))) fails.push(`合宿中の練習メニューがおかしい：${opts.join(',')}`);
+      if (s.player.injury && opts.some((o) => o === 'jp_appeal' || o === 'batting')) fails.push('ケガをしているのに代表の練習ができる');
       if (G.canTalk(s, s.roster.players[0], 'baseball') !== '侍ジャパンの活動中') fails.push('合宿中にチームメイトと話せてしまう');
 
       // 仲間と話す（週3回まで・同じ人は週1回）
@@ -121,8 +122,11 @@ module.exports = [
       const fails = [];
       const s = newPlayer(G, 'P', { ability: { velocity: 152, control: 75, stamina: 70 }, trust: 90 });
       s.flags.gameMode = 'auto';
+      // 選考の週にケガやメジャー移籍でいないことがないように
+      G.on('mlbCheck', () => true);
+      s.player.skills.push('durable');
       let picked = false;
-      for (let i = 0; i < 300 && !picked && !s.retired; i++) {
+      for (let i = 0; i < 700 && !picked && !s.retired; i++) {
         if (drainUntil(G, s, 'jp_series_select')) picked = true;
         else {
           // 今季の活躍を大きく見せる
@@ -146,6 +150,67 @@ module.exports = [
       s.japan.trust = 90;
       if (!(G.jpSelectBonus(s) > before || before > 0)) fails.push('監督の評価が選考に効かない');
       return { fails, note: h ? `${h.result}・${h.text}` : '' };
+    },
+  },
+  {
+    name: '侍ジャパンの試合も1試合ずつ操作できる（シーズンの成績には入らない）',
+    run() {
+      const G = load();
+      const fails = [];
+      const s = newPlayer(G, 'SS', { ability: 80, trust: 90 });
+      s.flags.gameMode = 'auto';
+      let picked = false;
+      for (let i = 0; i < 400 && !picked && !s.retired; i++) {
+        star(s);
+        if (drainUntil(G, s, 'intl_select')) picked = true;
+        else oneWeek(G, s);
+      }
+      if (!picked) return ['日本代表に選ばれない'];
+      drain(G, s);
+      const d = G.intlDates(s.year);
+      for (let i = 0; i < 20 && s.week < d.exhibitW - 1; i++) oneWeek(G, s);
+      // ここからは1試合ずつ
+      s.flags.gameMode = 'each';
+      let awaited = 0;
+      let clutches = 0;
+      let jpBoxes = 0;
+      let playedJp = 0;
+      const seasonPA0 = s.stats.bat.pa;
+      const year = s.year;
+      let npbAfter = 0;
+      for (let wk = 0; wk < 8 && s.intl && s.year === year; wk++) {
+        drain(G, s);
+        if (!s.intl) break;
+        const opts = G.trainingOptions(s);
+        G.doAction(s, (opts.find((o) => o.id === 'jp_tune') || opts[0]).id, 'relax'); // ケガで離脱しないよう調整中心
+        for (let i = 0; s.gw && i < 40; i++) {
+          if (s.gw.await) {
+            if (s.gw.cur.special) awaited++;
+            G.stepGames(s, G.approachList(s.player)[1].id);
+          } else if (s.gw.awaitClutch) {
+            clutches++;
+            G.stepGames(s, null, G.clutchChoices(s, s.gw.cur.own)[0].id);
+          } else {
+            const r = s.gw.last;
+            if (r && r.special && r.kind) playedJp++;
+            if (r && r.special && r.box && (r.box.homeT.id === 'n_jpn' || r.box.away.id === 'n_jpn')) jpBoxes++;
+            if (r && !r.special) npbAfter++;
+            G.stepGames(s, null);
+          }
+        }
+      }
+      drain(G, s);
+      const h = (s.intlHist || []).find((x) => x.year === year && x.type !== 'series');
+      // 出番のあった代表戦は、すべて作戦を選べる（ケガで出られない試合もある）
+      if (!playedJp) fails.push('代表の試合に一度も出られない');
+      if (awaited !== playedJp) fails.push(`出番のあった代表戦${playedJp}試合のうち、作戦を選べたのは${awaited}試合`);
+      if (playedJp && !jpBoxes) fails.push('スコアボードに「日本」が出ない');
+      if (!h) fails.push('大会の記録が残らない');
+      else if (!/打数/.test(h.text)) fails.push(`大会の成績がおかしい：${h.text}`);
+      // 代表の打席はシーズンの成績に入らない（開幕前の週）。開幕と重なった週はシーズンの試合も遊べる
+      const npbPA = s.stats.bat.pa - seasonPA0;
+      if (npbAfter === 0 && npbPA > 0) fails.push('代表の打席がシーズンの成績に入っている');
+      return { fails, note: `作戦を選んだ代表戦${awaited}試合・ここぞ${clutches}回・${h ? h.result : '-'}（${h ? h.text : ''}）${npbAfter ? `・同じ週のシーズン戦${npbAfter}試合` : ''}` };
     },
   },
 ];

@@ -308,6 +308,15 @@
   // ---------- 試合画面（1試合ずつ作戦を選ぶ） ----------
   const gameMeta = (s, own) => {
     const opp = G.teamById(own.oppId);
+    if (own.special) {
+      // 日本代表の試合
+      const sp = own.special;
+      const jp = G.teamById(own.ourId || 'n_jpn');
+      const day0 = s.gw.cur && s.gw.cur.day;
+      return `<div class="game-date jp-game">${day0 ? G.fmtDate(day0.d) : ''}・🇯🇵 ${esc(sp.title)}（${esc(sp.venue)}${own.parkId ? `・${esc(G.parkOf(own.parkId).name)}` : ''}）</div>
+      <div class="game-head"><span class="team-chip" style="background:${jp.color}">${jp.short}</span> vs <span class="team-chip" style="background:${opp.color}">${opp.short}</span>
+      <span class="muted">${esc(opp.name)}・侍ジャパンでの役割「${esc(G.jpRoleName(s))}」</span></div>`;
+    }
     const r = s.standings[s.player.teamId];
     const day = s.gw.cur && s.gw.cur.day;
     return `<div class="game-date">${day ? G.fmtDate(day.d) : ''} 18:00 試合開始・${own.home ? 'ホーム' : 'ビジター'}${own.inter ? '・交流戦' : ''}${day && day.makeup ? '・振替試合' : ''}</div>
@@ -321,7 +330,7 @@
     const head = Array.from({ length: b.n }, (_, i) => `<th>${i + 1}</th>`).join('');
     const row = (side, isHome) => {
       const t = G.teamById(side.id);
-      const me = side.id === ui.s.player.teamId;
+      const me = side.id === ui.s.player.teamId || side.id === 'n_jpn';
       return `<tr class="${me ? 'me' : ''}"><td class="tname"><span class="team-chip" style="background:${t.color}">${t.short}</span></td>${side.line
         .map((x) => `<td class="${x !== 0 && x !== 'X' ? 'run' : ''}">${x}</td>`)
         .join('')}<td class="tot">${side.R}</td><td>${side.H}</td><td>${side.E}</td></tr>`;
@@ -338,7 +347,7 @@
       .map((g) => {
         if (g.rain) return `<div class="game-row muted">${G.fmtDate(g.date)}　雨天中止（後日振替）</div>`;
         const mark = g.outcome === 'W' ? '○' : g.outcome === 'L' ? '●' : '△';
-        return `<details class="game-row"><summary><b class="res-${g.outcome}">${mark}</b> ${G.fmtDate(g.date)} vs ${G.teamById(g.oppId).short}${g.inter ? '（交流戦）' : ''} <b>${g.score[0]}-${g.score[1]}</b>　<span class="muted">${esc(g.text)}</span></summary>${boxHtml(g.box)}</details>`;
+        return `<details class="game-row"><summary><b class="res-${g.outcome}">${mark}</b> ${G.fmtDate(g.date)} vs ${G.teamById(g.oppId).short}${g.label ? `（${esc(g.label)}）` : g.inter ? '（交流戦）' : ''} <b>${g.score[0]}-${g.score[1]}</b>　<span class="muted">${esc(g.text)}</span></summary>${boxHtml(g.box)}</details>`;
       })
       .join('')}</div></details>`;
   };
@@ -354,7 +363,7 @@
     let scout;
     if (own.kind === 'bat') {
       const o = G.OPP_PITCHERS.find((x) => x.id === own.oppP.type);
-      const us = G.usageSummary(s);
+      const us = own.special ? null : G.usageSummary(s);
       scout = `<div class="scout"><b>${own.starter ? `今日は「${own.order}」でスタメン出場` : own.defOnly ? 'ベンチスタート（終盤の守備固めで出番がありそう）' : 'ベンチスタート（代打で出番がありそう）'}</b>
         ${us ? `<div class="muted">${esc(us.detail)}${us.mood ? `・${esc(us.mood)}` : ''}</div>` : ''}
         <div>相手先発：${esc(own.oppP.name)}（<b>${G.HAND_NAME[own.oppP.hand || 'R']}・${o.name}</b>）</div><div class="muted">スコアラー「${o.hint}」</div>${hintHtml(s, own)}</div>`;
@@ -422,12 +431,14 @@
         .join('')}</ol><div class="line">${G.pitLineText(r.line)}</div>`;
     }
     const acc = s.gw.acc;
-    const week = r.kind === 'bat' ? `今週の成績：${G.batLineText(acc.weekBat)}` : `今週の成績：${G.pitLineText(acc.weekPit)}`;
+    const week = r.special ? `侍ジャパンでの成績：${G.jpEventLine(s)}` : r.kind === 'bat' ? `今週の成績：${G.batLineText(acc.weekBat)}` : `今週の成績：${G.pitLineText(acc.weekPit)}`;
+    const extra = [r.tiebreak ? '延長タイブレークで決着' : '', r.note ? `⭐ ${r.note}` : '', r.evalNote ? r.evalNote.replace(/^（|）$/g, '') : ''].filter(Boolean);
     return `<div class="panel game-panel">
-      <div class="game-date">${G.fmtDate(r.date)}${r.inter ? '・交流戦' : ''}</div>
+      <div class="game-date ${r.special ? 'jp-game' : ''}">${G.fmtDate(r.date)}${r.special ? `・🇯🇵 ${esc(r.special.title)}（${esc(r.special.venue)}）` : r.inter ? '・交流戦' : ''}</div>
       <div class="game-head"><b class="res-${r.outcome}">${mark}</b> ${r.score[0]} - ${r.score[1]} <span class="muted">vs ${G.teamById(r.oppId).name}・作戦「${ap.name}」</span></div>
       ${clutchResult(s, r)}
       ${boxHtml(r.box)}
+      ${extra.length ? `<ul class="jp-notes">${extra.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
       ${read}${detail}
       <div class="muted" style="font-size:13px">${week}</div>
       <div class="act-foot mt"><span></span><span class="btns-row"><button class="btn sub small" data-act="autoGames">残りはおまかせ</button>
@@ -577,7 +588,9 @@
     const selP = priv.find((a) => a.id === ui.sel.priv);
     const jp = G.onJapanDuty(s) ? G.jpPhase(s) : null;
     const jpBanner = jp
-      ? `<div class="jp-banner"><div><b>🇯🇵 侍ジャパン ${esc(jp.name)}</b><small>${esc(jp.place)}で代表の活動中。練習は代表メニュー、仲間や首脳陣と話せるのは「侍ジャパン」タブ</small></div><button class="btn small" data-act="tab" data-arg="japan">侍ジャパンへ</button></div>`
+      ? `<div class="jp-banner"><div><b>🇯🇵 侍ジャパン ${esc(jp.name)}</b><small>${esc(jp.place)}で代表の活動中。練習は代表メニュー、仲間や首脳陣と話せるのは「侍ジャパン」タブ${
+          G.jpWeekGames(s) ? `。今週は代表の試合が${G.jpWeekGames(s)}（出番のある試合は1試合ずつ作戦を選べる）` : ''
+        }</small></div><button class="btn small" data-act="tab" data-arg="japan">侍ジャパンへ</button></div>`
       : '';
     return `${autoSummaryView(s)}<div class="panel">${quick}${jpBanner}
       <div class="section-title"><span class="step">1</span>今週の練習 <span class="muted">練習効率 ×${mul.toFixed(2)}（${phase.name}・${cond.name}）</span></div>

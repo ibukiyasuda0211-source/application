@@ -2625,3 +2625,20 @@ h3 {
 .cal-skip small {
   font-size: 12px;
 }
+
+.game-date.jp-game {
+  color: #1f4aa8;
+  font-weight: bold;
+}
+.jp-notes {
+  list-style: none;
+  margin: 6px 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #f4f7ff;
+  border: 1.5px solid #c9d8f5;
+  font-size: 13px;
+}
+.jp-notes li + li {
+  margin-top: 2px;
+}

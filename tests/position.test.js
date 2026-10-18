@@ -16,13 +16,17 @@ module.exports = [
         const G = load();
         const s = newPlayer(G, pos, { ability: pos === 'P' ? { velocity: 152, control: 70, stamina: 75 } : 70 });
         const p = s.player;
-        if (pos === 'P') p.prefRole = 'RP';
+        if (pos === 'P') {
+          p.prefRole = 'RP';
+          G.ensureUsage(s); // 最初に呼ぶとチームの基準が決まるので、そのあとで上書きする
+          s.flags.barERA = 9; // 先発転向の条件（防御率の見込み）を満たす投手にする
+        }
         for (const squad of ['first', 'second']) {
           for (const phase of ['jan', 'camp', 'open', 'season', 'post', 'fall', 'off']) {
             const w = weekOf(G, s.year, phase);
             if (!w) continue;
             let n = 0;
-            for (let i = 0; i < 300; i++) {
+            for (let i = 0; i < 1500; i++) {
               s.week = w;
               p.squad = squad;
               G.ensureUsage(s).status = 'bench';
@@ -38,7 +42,7 @@ module.exports = [
           }
         }
       }
-      return { fails, note: `1軍キャンプ ${counts['SS-first-camp']}回・1軍シーズン ${counts['SS-first-season']}回・2軍シーズン ${counts['SS-second-season']}回（300回中）` };
+      return { fails, note: `1軍キャンプ ${counts['SS-first-camp']}回・1軍シーズン ${counts['SS-first-season']}回・2軍シーズン ${counts['SS-second-season']}回（1500回中）` };
     },
   },
   {

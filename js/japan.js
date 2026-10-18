@@ -745,6 +745,20 @@
     return { lines, acc, wins, losses: n - wins, text: lines.join('\n') + addEval(s, total, '試合での働き') };
   };
 
+  // 1試合ずつ遊んだ強化試合のまとめ（遊んでいなければ、まとめて行う）
+  const exhibitionResult = (s, types, n, opps) => {
+    const it = s.intl;
+    const played = (it.exPlayed || []).filter((g) => types.includes(g.type) && g.year === s.year);
+    if (!played.length) return exhibitionGames(s, n, opps);
+    const p = s.player;
+    const acc = G.isPitcher(p) ? G.emptyPit() : G.emptyBat();
+    for (const g of played) if (g.line) G.addStats(acc, g.line);
+    const lines = played.map((g) => `vs ${g.opp}　${g.win ? '○' : '●'} ${g.score[0]}-${g.score[1]}｜${g.line ? (G.isPitcher(p) ? G.pitLineText(g.line) : G.batLineText(g.line)) : '出場なし'}`);
+    const ev = Math.round(played.reduce((a, g) => a + (g.evalDelta || 0), 0) * 10) / 10;
+    const wins = played.filter((g) => g.win).length;
+    return { lines, acc, wins, losses: played.length - wins, text: lines.join('\n') + (ev ? `（試合での働きで、首脳陣の評価${ev > 0 ? '+' : ''}${ev}）` : '') };
+  };
+
   // 本番の役割を決める
   const decideRole = (s) => {
     const it = s.intl;
@@ -819,7 +833,7 @@
       if (t && t.type === 'series' && w === sw) {
         if (!t.accepted) s.intl = null;
         else {
-          const r = exhibitionGames(s, 2, G.shuffle(['オーストラリア', '韓国', '台湾', 'メキシコ']));
+          const r = exhibitionResult(s, ['series'], 2, G.shuffle(['オーストラリア', '韓国', '台湾', 'メキシコ']));
           t.acc = r.acc;
           G.emit('intl:finish', s, t, `${r.wins}勝${r.losses}敗`, r.text);
         }
@@ -843,7 +857,7 @@
       s.queue.push({ kind: 'life', id: 'jp_dinner', title: '代表の食事会', text: '合宿の夜、選手だけの食事会が開かれた。どこに座ろうか。', data: {} });
     }
     if (w === d.exhibitW - 1) {
-      const r = exhibitionGames(s, 1, [G.teamById(otherNpbTeam(s)).name]);
+      const r = exhibitionResult(s, ['sendoff'], 1, [G.teamById(otherNpbTeam(s)).name]);
       t.exGames = (t.exGames || []).concat(r.lines);
       const mlb = G.jpSquad(s).filter((x) => x.mlb);
       G.scene(s, '壮行試合', `宮崎での壮行試合。満員のスタンドから、日の丸の旗が揺れる。\n\n${r.text}`);
@@ -860,7 +874,7 @@
     }
     if (w === d.exhibitW) {
       const opps = G.shuffle(G.NPB_TEAMS().filter((x) => x.id !== s.player.teamId)).slice(0, 2).map((x) => x.name);
-      const r = exhibitionGames(s, 2, opps);
+      const r = exhibitionResult(s, ['exhibit'], 2, opps);
       t.exGames = (t.exGames || []).concat(r.lines);
       G.scene(s, '強化試合', `名古屋・大阪での強化試合。本番前の最終調整だ。\n\n${r.text}`);
       decideRole(s);
@@ -910,9 +924,9 @@
     const bat = sq.filter((x) => x.pos !== 'P');
     const pit = sq.filter((x) => x.pos === 'P');
     const x = G.weighted([...bat.map((y) => ({ y, weight: Math.max(1, y.rating - 60) })), ...pit.map((y) => ({ y, weight: Math.max(1, (y.rating - 60) * 0.7) }))]).y;
-    const n = `${x.name.split(' ')[0]}（${G.jpTeamName(x)}）`;
+    const n = `${x.name}（${G.jpTeamName(x, false)}）`;
     let text;
-    if (x.pos === 'P') text = g.win ? G.pick([`${n}が${G.ri(5, 7)}回無失点の快投`, `${n}が圧巻の3者連続三振`, `${n}がピンチを切り抜けた`]) : `${n}が粘りの投球を見せるも及ばず`;
+    if (x.pos === 'P') text = g.win ? G.pick([`${n}が${G.ri(3, 5)}回無失点の好投`, `${n}が圧巻の3者連続三振`, `${n}がピンチを切り抜けた`]) : `${n}が粘りの投球を見せるも及ばず`;
     else text = g.win ? G.pick([`${n}が先制の${G.pick(['2ラン', 'タイムリー', 'ソロ'])}`, `${n}が決勝打`, `${n}が3安打の大当たり`, `${n}が好守で流れを呼んだ`]) : `${n}が一矢報いる${G.pick(['ソロ', 'タイムリー'])}`;
     if (G.jpIsFriend(s, x)) {
       text += '（仲間の活躍がうれしい）';
@@ -1010,6 +1024,185 @@
 
   // チームメイトとは、代表に行っている間は話せない
   G.on('canTalkMate', (why, s) => why || (onDuty(s) ? '侍ジャパンの活動中' : ''));
+
+
+  // ---------- 代表の試合：シーズン中と同じように、出番のある試合は1試合ずつ操作する ----------
+  const FOREIGN = {
+    east: ['キム', 'パク', 'イ', 'チェ', 'チャン', 'リン', 'ワン', 'チェン', 'ホン', 'ソン'],
+    west: ['ガルシア', 'ロドリゲス', 'スミス', 'ジョンソン', 'ミラー', 'マルティネス', 'ヘルナンデス', 'ブラウン', 'ウィルソン', 'ペレス', 'ゴンザレス', 'ロペス', 'クルーズ', 'デービス'],
+  };
+  const oppPitcherName = (oppId) => {
+    const tm = G.teamById(oppId);
+    if (!tm || tm.league !== 'intl') return G.randomMaleName();
+    return G.pick(tm.east ? FOREIGN.east : FOREIGN.west);
+  };
+  const oppName = (oppId) => {
+    const tm = G.teamById(oppId);
+    return tm.league === 'intl' ? tm.name.replace(/代表$/, '') : tm.name;
+  };
+  const addDays = (ymd, n) => {
+    const [y, m, d] = ymd.split('-').map(Number);
+    return G.ymd(new Date(Date.UTC(y, m - 1, d + n)));
+  };
+  const ids = (names) => names.map((n) => G.intlTeamByName(n).id);
+  const EXHIBITION = ['sendoff', 'exhibit', 'series'];
+  const STR = { pool: 22, qf: 17, sf: 8, final: 4, sendoff: 10, exhibit: 10, series: 12 };
+  const LEVEL = { pool: 2, qf: -1, sf: -3, final: -4, sendoff: 0, exhibit: 0, series: 1 };
+
+  // 今週の代表の試合（日付つき）
+  G.on('weekSpecialGames', (list, s) => {
+    const t = s.intl;
+    if (!t || !t.accepted || !t.squad || t.year !== s.year || s.retired || s.after) return list;
+    const day = (d, sp) => ({ d, special: { kind: 'jp', ...sp } });
+    const out = [];
+    if (t.type === 'series') {
+      if (s.week !== G.seriesWeek(s.year)) return list;
+      const opps = G.shuffle(ids(['豪州', '韓国', '台湾', 'メキシコ'])).slice(0, 2);
+      const sat = G.ymd(G.dateOfWeek(s.year, s.week, 5));
+      out.push(day(sat, { type: 'series', title: G.JP_SERIES_NAME, venue: '東京', parkId: 'tokyo', opp: opps[0], idx: 0 }));
+      out.push(day(addDays(sat, 1), { type: 'series', title: G.JP_SERIES_NAME, venue: '東京', parkId: 'tokyo', opp: opps[1], idx: 1 }));
+      return [...list, ...out];
+    }
+    const d = G.intlDates(s.year);
+    const w = s.week;
+    const npb = G.shuffle(G.NPB_TEAMS().filter((x) => x.id !== s.player.teamId).map((x) => x.id));
+    if (w === d.exhibitW - 1) out.push(day(d.sendoff, { type: 'sendoff', title: '壮行試合', venue: '宮崎', opp: npb[0], idx: 0 }));
+    if (w === d.exhibitW) {
+      out.push(day(d.exhibit, { type: 'exhibit', title: '強化試合', venue: '名古屋', parkId: 'nagoya', opp: npb[1], idx: 0 }));
+      out.push(day(addDays(d.exhibit, 1), { type: 'exhibit', title: '強化試合', venue: '大阪', parkId: 'osaka', opp: npb[2], idx: 1 }));
+    }
+    if (w === d.poolW) {
+      const opps = G.shuffle(ids(G.INTL_OPPS.pool)).slice(0, 4);
+      opps.forEach((o, i) => out.push(day(addDays(d.pool, i), { type: 'pool', stage: 0, title: `${G.INTL_NAME} 1次ラウンド`, venue: '東京', parkId: 'tokyo', opp: o, idx: i })));
+    }
+    if (w === d.qfW) out.push(day(d.qf, { type: 'qf', stage: 1, title: `${G.INTL_NAME} 準々決勝`, venue: '東京', parkId: 'tokyo', opp: G.pick(ids(G.INTL_OPPS.qf)) }));
+    if (w === d.sfW) {
+      out.push(day(d.sf, { type: 'sf', stage: 2, title: `${G.INTL_NAME} 準決勝`, venue: 'マイアミ', parkId: 'm_mia', opp: G.pick(ids(G.INTL_OPPS.sf)) }));
+      out.push(day(d.final, { type: 'final', stage: 3, title: `${G.INTL_NAME} 決勝`, venue: 'マイアミ', parkId: 'm_mia', opp: G.pick(ids(G.INTL_OPPS.final)), requiresWin: true }));
+    }
+    return [...list, ...out];
+  });
+
+  // 打順ごとの打席数（シーズン中と同じ考え方）
+  const paFor = (slot) => (slot <= 2 ? (G.chance(0.6) ? 5 : 4) : slot <= 5 ? (G.chance(0.3) ? 5 : 4) : G.chance(0.15) ? 3 : G.chance(0.12) ? 5 : 4);
+
+  // 試合の準備：役割に応じて、どこで出番があるか
+  G.on('specialGame:prepare', (ctx0, s, day) => {
+    const sp = day.special;
+    const t = s.intl;
+    if (!sp || sp.kind !== 'jp' || !t || !t.squad) return ctx0;
+    // 決勝は準決勝に勝ったときだけ
+    if (sp.requiresWin) {
+      const sf = t.games.filter((g) => g.stage === 2);
+      if (!sf.length || !sf[sf.length - 1].win) return { skip: true };
+    }
+    const p = s.player;
+    const exh = EXHIBITION.includes(sp.type);
+    const sq = G.jpSquad(s);
+    const names = (f) => sq.filter(f).map((x) => x.name);
+    const myStr = 60;
+    const oppStr = myStr - STR[sp.type];
+    const ctx = {
+      special: sp,
+      oppId: sp.opp,
+      myStr,
+      oppStr,
+      kind: null,
+      home: sp.type === 'sf' || sp.type === 'final' ? G.chance(0.5) : true,
+      parkId: sp.parkId,
+      levelOff: LEVEL[sp.type],
+      ourId: 'n_jpn',
+      mateNames: { SP: names((x) => x.prole === 'SP'), CL: names((x) => x.prole === 'CL'), any: names((x) => x.pos === 'P') },
+      hrBase: exh ? (t.exPlayed || []).filter((g) => g.year === s.year && g.line).reduce((a, g) => a + (g.line.hr || 0), 0) : t.games.reduce((a, g) => a + ((g.line && g.line.hr) || 0), 0),
+      hrLabel: exh ? '代表' : '大会',
+      clutchBoost: exh ? 1 : sp.type === 'sf' || sp.type === 'final' ? 3.5 : 2.5,
+    };
+    const role = t.role;
+    if (p.injury) {
+      // ケガ：チームは戦うが、自分は出られない
+    } else if (!G.isPitcher(p)) {
+      let slot = null;
+      let starter = false;
+      if (role === 'cleanup') {
+        starter = true;
+        slot = 4;
+      } else if (role === 'starter') {
+        starter = true;
+        slot = parseInt(G.battingOrder(p), 10) || 6;
+        if (slot === 4) slot = 5;
+      } else if (G.chance(exh ? 0.5 : 0.12)) {
+        starter = true;
+        slot = G.pick([7, 8, 9]);
+      }
+      const nPA = starter ? paFor(slot) : G.chance(exh ? 0.6 : 0.4) ? 1 : 0;
+      const types = sp.type === 'sf' || sp.type === 'final' ? ['ace', 'fast', 'ace', 'control'] : G.OPP_PITCHERS.map((o) => o.id);
+      if (nPA) Object.assign(ctx, { kind: 'bat', nPA, starter, order: starter ? `${slot}番` : '代打', oppP: { name: oppPitcherName(sp.opp), type: G.pick(types) } });
+    } else if (role === 'SP') {
+      const starts = (sp.type === 'pool' && sp.idx === 1) || sp.type === 'final' || (exh && sp.idx === 0);
+      if (starts) Object.assign(ctx, { kind: 'pit', role: 'SP', inn: exh ? 3 : sp.type === 'pool' ? 4 : 5, lineup: G.pick(G.OPP_LINEUPS).id, situation: exh ? '先発で3イニングの予定' : `${sp.title}の先発マウンドへ（球数制限あり）` });
+    } else {
+      const pWin = G.clamp(0.5 + STR[sp.type] * 0.012, 0.25, 0.8);
+      const pre = G.chance(pWin) ? 'W' : 'L';
+      const lead = G.ri(1, 3);
+      const cl = role === 'CL';
+      const close = pre === 'W' && lead <= 3;
+      const appear = cl ? (close ? G.chance(0.8) : G.chance(0.15)) : G.chance(exh ? 0.7 : 0.45);
+      if (appear) {
+        const situation = cl && close ? `9回、${lead}点リードの場面で登板！` : close ? `${G.ri(6, 8)}回、${lead}点リードの場面で登板` : `${G.ri(5, 8)}回、${pre === 'W' ? 'リード' : 'ビハインド'}の場面で登板`;
+        Object.assign(ctx, { kind: 'pit', role: cl ? 'CL' : 'RP', pre, lead, lineup: G.pick(G.OPP_LINEUPS).id, situation });
+      }
+    }
+    G.emit('ownGame:prepare', s, ctx);
+    return ctx;
+  });
+
+  // 試合の結果：大会や強化試合の記録に入れる（シーズンの成績には入らない）
+  G.on('specialGame:result', (s, day, own, res) => {
+    const sp = day.special;
+    const t = s.intl;
+    if (!sp || sp.kind !== 'jp' || !t) return;
+    const p = s.player;
+    const g = { year: s.year, type: sp.type, stage: sp.stage, opp: oppName(sp.opp), oppId: sp.opp, win: res.outcome === 'W', score: res.score, line: res.kind ? res.line : null, date: day.d };
+    g.hero = G.jpHero(s, g);
+    res.note = g.hero;
+    if (res.kind) p.stamina = G.clamp(p.stamina - (G.isPitcher(p) ? 9 : 5), 0, 100);
+    if (EXHIBITION.includes(sp.type)) {
+      // 強化試合の働きで、首脳陣の評価が動く
+      let dv = 0;
+      if (res.kind === 'pit') dv = (own.role === 'SP' ? 1.6 : 1) * (1.2 - res.line.r) * 2.5 + res.line.k * 0.4;
+      else if (res.kind === 'bat') dv = G.batGameValue(res.line) * 2.4;
+      if (res.kind) {
+        const before = t.eval;
+        res.evalNote = addEval(s, G.clamp(dv * G.jpStyle(s).w.camp, -6, 8), '試合での働き');
+        g.evalDelta = t.eval - before;
+      }
+      t.exPlayed = [...(t.exPlayed || []), g];
+    } else {
+      t.games.push(g);
+      const l = res.line;
+      if (res.kind === 'bat' && (l.hr || l.h >= 3)) G.buzz(s, 'hotgame', { text: `${sp.title.replace(G.INTL_NAME, '').trim() || '日本代表'}での${l.hr ? 'ホームラン' : '猛打賞'}` });
+      if (res.clutch && ['sayonara', 'ahead'].includes(res.clutch.verdict)) G.buzz(s, 'hotgame', { text: '日の丸を背負っての勝負強い一打' });
+    }
+  });
+  const ROLE_LABEL = { SP: '先発', RP: '中継ぎ', CL: '抑え', cleanup: '4番', starter: 'スタメン', bench: '控え' };
+  G.jpRoleName = (s) => (s.intl ? ROLE_LABEL[s.intl.role] || '' : '');
+  // 今週の代表の試合（「1次ラウンド4試合」のような説明）
+  G.jpWeekGames = (s) => {
+    const days = G.filter('weekSpecialGames', [], s).filter((d) => d.special.kind === 'jp');
+    if (!days.length) return '';
+    const titles = [...new Set(days.map((d) => d.special.title.replace(`${G.INTL_NAME} `, '')))];
+    return `${titles.join('・')}${days.length > 1 ? `（最大${days.length}試合）` : ''}`;
+  };
+  G.jpEventLine = (s) => {
+    const t = s.intl;
+    if (!t) return '';
+    const p = s.player;
+    const acc = G.isPitcher(p) ? G.emptyPit() : G.emptyBat();
+    const list = [...t.games, ...(t.exPlayed || []).filter((g) => g.year === s.year)];
+    for (const g of list) if (g.line) G.addStats(acc, g.line);
+    const n = G.isPitcher(p) ? acc.outs : acc.pa;
+    return n ? (G.isPitcher(p) ? G.pitLineText(acc) : G.batLineText(acc)) : 'まだ出番なし';
+  };
 
   G.jpTabVisible = (s) => !!(s.intl || (s.japan && s.japan.everCalled) || G.jpFriends(s).length);
 })();

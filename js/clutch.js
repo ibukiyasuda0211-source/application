@@ -24,7 +24,7 @@
     if (own.kind === 'bat') {
       if (own.defOnly) return;
       const pinch = own.order === '代打';
-      if (!G.chance(pinch ? 0.28 : 0.07)) return;
+      if (!G.chance(Math.min(0.8, (pinch ? 0.28 : 0.07) * (own.clutchBoost || 1)))) return;
       const inning = G.pick([7, 8, 9, 9, 9]);
       const b = G.weighted(BASES);
       let diff;
@@ -35,7 +35,7 @@
     } else if (own.kind === 'pit' && own.role !== 'SP' && own.pre === 'W' && own.lead <= 3) {
       const rank = own.role === 'CL' ? 'CL' : s.player.rpRank;
       const pr = rank === 'CL' ? 0.3 : rank === 'setup' ? 0.2 : 0.12;
-      if (!G.chance(pr)) return;
+      if (!G.chance(Math.min(0.8, pr * (own.clutchBoost || 1)))) return;
       const b = G.chance(0.6) ? BASES[0] : BASES[1];
       const inning = Number((own.situation.match(/^(\d)回/) || [0, 9])[1]);
       own.clutch = { type: 'pit', inning, bottom: !own.home, bases: b.v, runners: b.n, lead: own.lead, batter: otherName(s) };

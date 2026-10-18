@@ -216,7 +216,7 @@
     const { oppId, myStr, oppStr } = ctx;
     let pWin = G.clamp(0.5 + (myStr - oppStr) * 0.012, 0.25, 0.75);
     const res = { oppId, kind: ctx.kind, line: null, ap: apId, order: ctx.order, situation: ctx.situation };
-    const off = G.levelOffset(s);
+    const off = ctx.levelOff !== undefined ? ctx.levelOff : G.levelOffset(s);
     // 相性（左右・タイプ・球場）、球場の広さ、MLBでの疲れ・適応が、打球や三振の出やすさに響く
     const park = G.envMods ? G.envMods(s, ctx) : {};
     let outcome = null;
@@ -378,6 +378,7 @@
   // 試合結果（スコア・自分の投球・登板した場面）と矛盾しないイニングスコアをつくる
   G.buildBox = (s, res, ctx) => {
     const p = s.player;
+    const ourId = ctx.ourId || p.teamId; // 日本代表の試合では「日本」
     const [ours, theirs] = res.score;
     let n = 9;
     const our = new Array(12).fill(0);
@@ -477,6 +478,10 @@
     // 責任投手
     const roster = G.ensureRoster(s).players;
     const mate = (role) => {
+      if (ctx.mateNames) {
+        const list = ctx.mateNames[role || 'any'] || ctx.mateNames.any;
+        return list && list.length ? G.pick(list) : G.randomMaleName();
+      }
       const list = roster.filter((m) => m.pos === 'P' && (role ? m.role === role : m.role !== 'farm'));
       return list.length ? G.pick(list).name : G.randomMaleName();
     };
@@ -499,11 +504,11 @@
     // 本塁打（自分の分は通算何号かも）
     const hrs = [];
     if (res.kind === 'bat' && res.pas) {
-      let num = s.stats.bat.hr;
+      let num = ctx.hrBase !== undefined ? ctx.hrBase : s.stats.bat.hr;
       for (const pa of res.pas)
         if (pa.code === 'HR') {
           num++;
-          hrs.push(`${me} ${num}号（${['', 'ソロ', '2ラン', '3ラン', '満塁'][Math.min(4, pa.rbi)]}）`);
+          hrs.push(`${me} ${ctx.hrLabel || ''}${num}号（${['', 'ソロ', '2ラン', '3ラン', '満塁'][Math.min(4, pa.rbi)]}）`);
         }
     }
     const lines = (arr, R) => arr.slice(0, n).map((x) => x);
@@ -514,8 +519,8 @@
       n,
       home,
       oppId: res.oppId,
-      away: { id: home ? res.oppId : p.teamId, line: awayLine, R: awayR, H: home ? theirH : ourH, E: home ? theirE : ourE },
-      homeT: { id: home ? p.teamId : res.oppId, line: homeLine, R: homeR, H: home ? ourH : theirH, E: home ? ourE : theirE },
+      away: { id: home ? res.oppId : ourId, line: awayLine, R: awayR, H: home ? theirH : ourH, E: home ? theirE : ourE },
+      homeT: { id: home ? ourId : res.oppId, line: homeLine, R: homeR, H: home ? ourH : theirH, E: home ? ourE : theirE },
       w,
       l,
       sv,
@@ -528,6 +533,13 @@
     const p = s.player;
     const gw = s.gw;
     const day = gw.days[gw.d];
+    // 日本代表などの特別な試合（チームの日程とは別）
+    if (day.special) {
+      const own = G.filter('specialGame:prepare', { skip: true }, s, day);
+      if (!own.skip) G.planClutch(s, own);
+      gw.cur = { special: true, own, day, pairs: {} };
+      return;
+    }
     if (day.rain) {
       gw.cur = { rain: true, day };
       return;
@@ -537,7 +549,9 @@
     // 日程表どおりのカード（3連戦・ホーム／ビジター）
     for (const x of G.dayPairs(s.year, day)) {
       if (x.home === p.teamId || x.away === p.teamId) {
-        own = G.prepareOwnGame(s, x.home === p.teamId ? x.away : x.home);
+        const oppId = x.home === p.teamId ? x.away : x.home;
+        // 代表の試合などでチームを離れている日は、チームだけが戦う
+        own = day.absent ? { oppId, myStr: G.teamStrength(s, p.teamId), oppStr: G.teamStrength(s, oppId), kind: null } : G.prepareOwnGame(s, oppId);
         own.home = x.home === p.teamId;
         own.inter = !!day.inter;
         G.planClutch(s, own);
@@ -546,7 +560,30 @@
     gw.cur = { pairs, own, day };
   };
 
+  const executeSpecialDay = (s, apId, clutchId) => {
+    const gw = s.gw;
+    const { own, day } = gw.cur;
+    gw.d++;
+    gw.cur = null;
+    if (own.skip) return null;
+    const res = G.executeOwnGame(s, own, apId, clutchId);
+    // 国際大会に引き分けはない（延長タイブレークで決着）
+    if (res.outcome === 'D') {
+      const win = G.chance(0.5);
+      res.outcome = win ? 'W' : 'L';
+      res.score = win ? [res.score[0] + 1, res.score[1]] : [res.score[0], res.score[1] + 1];
+      res.tiebreak = true;
+    }
+    res.date = day.d;
+    res.special = day.special;
+    res.box = G.buildBox(s, res, own);
+    (gw.specialGames = gw.specialGames || []).push(res);
+    G.emit('specialGame:result', s, day, own, res);
+    return res;
+  };
+
   const executeDay = (s, apId, clutchId) => {
+    if (s.gw.cur.special) return executeSpecialDay(s, apId, clutchId);
     const p = s.player;
     const gw = s.gw;
     const { pairs, own, day } = gw.cur;
@@ -615,8 +652,11 @@
   };
 
   // ---------- 1週間の試合の進行 ----------
-  G.startGames = (s) => {
-    const days = G.daysInWeek(s.week, s.year).slice();
+  // special：日本代表などの特別な試合の日（チームの試合より先にある）。season：チームの試合もある週か
+  G.startGames = (s, special = [], season = true) => {
+    const last = special.length ? special[special.length - 1].d : null;
+    const team = season ? G.daysInWeek(s.week, s.year).map((d) => (last && d.d <= last ? { ...d, absent: true } : d)) : [];
+    const days = [...special, ...team].sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0));
     s.gw = {
       n: days.length,
       days,
@@ -681,7 +721,12 @@
 
   // 週の試合（スコアボードつき）を、次の週に振り返れるように残す
   const keepWeek = (s, gw) => {
-    s.lastGames = gw.games.map((g) => (g.rain ? { rain: true, date: g.date } : { date: g.date, outcome: g.outcome, score: g.score, oppId: g.oppId, inter: g.inter, box: g.box, kind: g.kind, text: g.kind === 'bat' ? G.batLineText(g.line) : g.kind === 'pit' ? G.pitLineText(g.line) : '出場なし' }));
+    const all = [...(gw.specialGames || []), ...gw.games].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    s.lastGames = all.map((g) =>
+      g.rain
+        ? { rain: true, date: g.date }
+        : { date: g.date, outcome: g.outcome, score: g.score, oppId: g.oppId, inter: g.inter, label: g.special ? g.special.title : '', box: g.box, kind: g.kind, text: g.kind === 'bat' ? G.batLineText(g.line) : g.kind === 'pit' ? G.pitLineText(g.line) : '出場なし' },
+    );
   };
 
   G.finishGames = (s) => {

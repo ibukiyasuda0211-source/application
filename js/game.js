@@ -265,9 +265,11 @@
       }
     }
     results.forEach((r, i) => log(s, r, '', cats[i].replace('!', ''), cats[i].endsWith('!')));
-    // シーズン中は試合へ（1試合ずつ作戦を選べる）
-    if (G.phaseOf(s.week, s.year).id === 'season' && G.gamesInWeek(s.week, s.year) > 0) {
-      G.startGames(s);
+    // シーズン中は試合へ（1試合ずつ作戦を選べる）。日本代表の試合がある週も
+    const special = G.filter('weekSpecialGames', [], s);
+    const season = G.phaseOf(s.week, s.year).id === 'season' && G.gamesInWeek(s.week, s.year) > 0;
+    if (special.length || season) {
+      G.startGames(s, special, season);
       G.stepGames(s, null);
     } else G.endWeek(s, null);
   };
@@ -278,7 +280,7 @@
     const phase = G.phaseOf(s.week, s.year).id;
     const ov = G.overall(p);
 
-    if (phase !== 'season') s.lastGames = null;
+    if (phase !== 'season' && !(gw && gw.specialGames && gw.specialGames.length)) s.lastGames = null;
     if (phase === 'open' && !G.blocked('openGames', s)) {
       const r = G.simOpenGames(s, 4);
       G.addStats(s.open.bat, r.bat);

@@ -34,6 +34,7 @@
   const QF_OPP = ['イタリア', 'メキシコ', 'プエルトリコ', 'オランダ', 'キューバ'];
   const SF_OPP = ['メキシコ', 'ベネズエラ', 'ドミニカ共和国', 'プエルトリコ'];
   const FINAL_OPP = ['アメリカ', 'ドミニカ共和国', 'アメリカ'];
+  G.INTL_OPPS = { pool: POOL_OPP, qf: QF_OPP, sf: SF_OPP, final: FINAL_OPP };
 
   // 前年の働きで選考（タイトル・WAR・人気・能力）
   const selection = (s) => {
@@ -137,18 +138,22 @@
       finish(s, t, '途中離脱');
       return;
     }
-    const games = [];
-    if (stage === 0) {
-      const opps = G.shuffle(POOL_OPP).slice(0, 4);
-      opps.forEach((o, i) => games.push(playGame(s, t, 0, o, i)));
-    } else if (stage === 1) games.push(playGame(s, t, 1, G.pick(QF_OPP)));
-    else {
-      const sf = playGame(s, t, 2, G.pick(SF_OPP));
-      games.push(sf);
-      if (sf.win) games.push(playGame(s, t, 3, G.pick(FINAL_OPP)));
+    // 今週1試合ずつ遊んだ試合があればそれを使う（なければ、まとめて行う）
+    let games = t.games.filter((g) => (stage === 2 ? g.stage >= 2 : g.stage === stage));
+    if (!games.length) {
+      games = [];
+      if (stage === 0) {
+        const opps = G.shuffle(POOL_OPP).slice(0, 4);
+        opps.forEach((o, i) => games.push(playGame(s, t, 0, o, i)));
+      } else if (stage === 1) games.push(playGame(s, t, 1, G.pick(QF_OPP)));
+      else {
+        const sf = playGame(s, t, 2, G.pick(SF_OPP));
+        games.push(sf);
+        if (sf.win) games.push(playGame(s, t, 3, G.pick(FINAL_OPP)));
+      }
+      t.games.push(...games);
+      p.stamina = G.clamp(p.stamina - 8 * games.length * (G.isPitcher(p) ? 1.2 : 0.6), 0, 100);
     }
-    t.games.push(...games);
-    p.stamina = G.clamp(p.stamina - 8 * games.length * (G.isPitcher(p) ? 1.2 : 0.6), 0, 100);
     let lines = games.map((g) => gameText(s, g)).join('\n');
     // 決勝の前に、監督の言葉
     const speech = stage === 2 && games[1] ? G.filter('intlFinalSpeech', '', s) : '';

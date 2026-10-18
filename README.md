@@ -28,7 +28,7 @@
 | 試合 | 出場する試合の前に「この試合で意識すること」を選ぶ（長打狙い・バットに当てていく・見ていく など。投手は 力で押す・低めを丁寧に など）。相手投手や相手打線のタイプとの相性で結果が変わり、打席ごとの結果も見られる。まとめて自動で進める設定もあり |
 | ここぞ！の場面 | 終盤の勝負どころ（例：9回裏2アウト満塁、1点ビハインド）や救援でのピンチだけ試合が止まり、勝負の仕方を選べる。チャンス◯・ピンチ◯などの特殊能力があれば専用の作戦も。結果はサヨナラ・逆転・同点・凡退まで、スコアボードと食い違わないように決まる |
 | 日本代表 | 3年に1度、3月に「世界野球クラシック」。前年の活躍で選ばれると、1月のメンバー発表 → 2月の宮崎合宿 → 壮行試合・メジャー組の合流 → 3月初めの強化試合 → 1次ラウンド → 準々決勝 → 準決勝・決勝（マイアミ）。大会の前の年の11月には若手中心の「侍ジャパンシリーズ」も |
-| 侍ジャパン | 代表の常連たち（年をとり、世代交代しながら続いていく）と監督・コーチ陣。合宿中は「侍ジャパン」タブで仲間（週3回）や首脳陣（それぞれ週1回）と話せる。監督のタイプ（信頼の人・実力主義・データ重視・熱血漢）によって評価のされ方が変わり、合宿と強化試合の「首脳陣の評価」で本番の役割（スタメン・控え・4番・抑えなど）が決まる。ライバルやチームメイトが一緒に選ばれることも。仲良くなった代表仲間は人間関係に加わり、大会のあとも連絡を取り合ったり、合同自主トレに誘われたりする。同じ監督のあいだは評価が次の選考に響く |
+| 侍ジャパン | 代表の常連たち（年をとり、世代交代しながら続いていく）と監督・コーチ陣。合宿中は「侍ジャパン」タブで仲間（週3回）や首脳陣（それぞれ週1回）と話せる。壮行試合・強化試合・本大会・侍ジャパンシリーズの試合は、シーズン中と同じように出番のある試合を1試合ずつ操作できる（作戦選び・ここぞの場面・スコアボードは「日本 vs 相手国」。成績はシーズンとは別に記録）。監督のタイプ（信頼の人・実力主義・データ重視・熱血漢）によって評価のされ方が変わり、合宿と強化試合の「首脳陣の評価」で本番の役割（スタメン・控え・4番・抑えなど）が決まる。ライバルやチームメイトが一緒に選ばれることも。仲良くなった代表仲間は人間関係に加わり、大会のあとも連絡を取り合ったり、合同自主トレに誘われたりする。同じ監督のあいだは評価が次の選考に響く |
 | タイトル争い・同期対決 | シーズン後半はタイトル争いの状況が毎週ログに流れ、順位が入れ替わると実況とSNSが反応。同期のライバルが同じリーグの主力なら、タイトルを直接争う「同期対決」に |
 | 合同自主トレ | 1月・12月に先輩・ライバル・後輩と合同自主トレ。続けると先輩やライバルから特殊能力を伝授され、後輩は頭角を現す |
 | ベテランの道 | 31歳から「ベテラン調整」で冬の衰えをゆるやかにできる。コーチに相談すると、技巧派への転身・巧打者への転身などのモデルチェンジ（選んだ能力の衰えが半分に） |
@@ -135,6 +135,6 @@ G.on('trainingMul', (m, s) => m * 1.1);          // 値を加工する（filter�
 G.on('contractScene', (s) => G.underContract(s)); // true を返すと本体の処理を止める（blocked）
 ```
 
-主な合図：`intl:selected` `intl:accepted` `intl:finish` `newGame` `week:life` `week:after` `year:life` `stories` `private` `buzz` `season:week` `scheduled` `seasonEnd` `leaders` `scene:resolved` `retire` `finishLife` `after:start` `after:week` `after:newYear` `after:seasonEnd` `joinMLB` `joinNPB` `ownGame:prepare` `ownGame:result` `ach:before` `invest:beforeBuy` `migrate`（値の加工：`trainingMul` `injuryMul` `afterIncome` `extraActions` `canJointTrain` `trainingOptions` `trainingDone` `canTalkMate` `intlFinalSpeech`、止める：`contractScene` `releaseCheck` `mlbCheck` `openGames`）
+主な合図：`intl:selected` `intl:accepted` `intl:finish` `specialGame:result` `newGame` `week:life` `week:after` `year:life` `stories` `private` `buzz` `season:week` `scheduled` `seasonEnd` `leaders` `scene:resolved` `retire` `finishLife` `after:start` `after:week` `after:newYear` `after:seasonEnd` `joinMLB` `joinNPB` `ownGame:prepare` `ownGame:result` `ach:before` `invest:beforeBuy` `migrate`（値の加工：`trainingMul` `injuryMul` `afterIncome` `extraActions` `canJointTrain` `trainingOptions` `trainingDone` `canTalkMate` `intlFinalSpeech` `weekSpecialGames` `specialGame:prepare`、止める：`contractScene` `releaseCheck` `mlbCheck` `openGames`）
 
 球団・選手名はすべて架空のものです。
