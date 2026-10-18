@@ -182,8 +182,19 @@
   };
 
   // 選択が必要な出来事・ケガ・引退などで止まる。お知らせ（info）は集めて最後にまとめて見せる
+  // カレンダーの日付まで進めるときの行き先（その日を含む週の始めで止まる）。もう過ぎた・今週なら null
+  G.skipTarget = (s, ymd) => {
+    const [y, m, d] = ymd.split('-').map(Number);
+    if (y !== s.year) return null;
+    const date = new Date(Date.UTC(y, m - 1, d));
+    const w = G.weekOfDate(y, date);
+    if (w <= s.week) return null;
+    return { id: 'date', name: `${G.fmtDate(date)}の週`, y, w: Math.min(w, 53) };
+  };
+
+  // targetId は「4週間」などの id か、G.skipTarget でつくった行き先
   G.autoAdvance = (s, targetId) => {
-    const t = G.autoTargets(s).find((x) => x.id === targetId) || G.autoTargets(s)[0];
+    const t = (targetId && typeof targetId === 'object' ? targetId : null) || G.autoTargets(s).find((x) => x.id === targetId) || G.autoTargets(s)[0];
     const plan = G.autoPlan(s);
     const p = s.player;
     const before = { year: s.year, week: s.week, money: p.money, bat: { ...s.stats.bat }, pit: { ...s.stats.pit }, ach: Object.keys(s.ach || {}).length, team: { ...(s.standings[p.teamId] || {}) } };

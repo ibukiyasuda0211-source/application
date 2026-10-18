@@ -2612,3 +2612,16 @@ h3 {
   background: #10275c;
   font-size: 14px;
 }
+
+.cal-skip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1.5px dashed var(--line);
+}
+.cal-skip small {
+  font-size: 12px;
+}

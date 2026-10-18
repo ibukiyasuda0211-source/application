@@ -91,7 +91,10 @@
     if (s.flags.posOfferYear === s.year) return;
     if (s.queue.some((q) => q.kind !== 'info')) return;
     const phase = G.phaseOf(s.week, s.year).id;
-    if (!['camp', 'open', 'season', 'fall'].includes(phase)) return;
+    // 2軍の選手には、チームが動いている時期ならいつでも。1軍の選手には、シーズン中は打診せず春・秋のキャンプだけ
+    const when = p.squad === 'second' ? ['camp', 'open', 'season', 'post', 'fall'] : ['camp', 'fall'];
+    if (!when.includes(phase)) return;
+    if (G.onJapanDuty && G.onJapanDuty(s)) return; // 代表でチームを離れている
     const base = phase === 'camp' || phase === 'fall' ? 0.06 : 0.015;
     if (!G.chance(base)) return;
     const coach = s.people.coach.name;

@@ -1505,9 +1505,17 @@
       }
       for (const e of ev[sel] || []) items.push(`<li class="${e.cls}">${esc(e.text)}</li>`);
       const others = day && !day.rain ? G.dayPairs(year, day).filter((x) => x.home !== p.teamId && x.away !== p.teamId && (x.lg === 'inter' || x.lg === G.teamById(p.teamId).league)) : [];
+      // この日までスキップ（その日を含む週の始めまで、おまかせで進める）
+      const skip = !s.ended && !(s.retired && !s.after) ? G.skipTarget(s, sel) : null;
+      const busy = s.queue.length || s.gw;
+      const skipHtml = skip
+        ? `<div class="cal-skip"><button class="btn small" data-act="calSkip" data-arg="${sel}" ${busy ? 'disabled' : ''}>⏩ この日までスキップ</button><small class="muted">${
+            busy ? 'いまの場面や試合を終えてから使えます' : `おまかせで進み、この日を含む週（${G.weekLabel(skip.y, skip.w).replace(/〜.*$/, '')}〜）の始めで止まります。大事な選択やケガのときは途中で止まります`
+          }</small></div>`
+        : '';
       detail = `<div class="cal-detail"><h4>${G.fmtDate(sel)}</h4>${items.length ? `<ul>${items.join('')}</ul>` : '<p class="muted">予定なし</p>'}${
         others.length ? `<div class="muted cal-others">ほかのカード：${others.map((x) => `${esc(G.teamById(x.away).short)}－${esc(G.teamById(x.home).short)}`).join('・')}</div>` : ''
-      }</div>`;
+      }${skipHtml}</div>`;
     }
     const months = Array.from({ length: 12 }, (_, i) => i + 1)
       .map((m) => `<button class="place ${m === month ? 'on' : ''}" data-act="calMonth" data-arg="${m}">${m}月</button>`)
@@ -1528,7 +1536,7 @@
       <div class="cal-sum muted">${w + l + dr ? `この月の試合：${w}勝${l}敗${dr ? `${dr}分` : ''}` : ''}　開幕 ${G.fmtDate(c.opening)}・最終戦 ${G.fmtDate(c.lastGame)}（雨天中止 ${c.rainN}試合は終盤に振替）</div>
       <div class="cal-grid">${G.DOW.map((d, i) => `<div class="cal-dow ${i === 0 ? 'sun' : i === 6 ? 'sat' : ''}">${d}</div>`).join('')}${cells.join('')}</div>
       <div class="cal-legend">${key.map(([k, n]) => `<span class="cal-ev ${k}">${n}</span>`).join('')}<span class="team-chip mini" style="background:#888">@相手</span><span class="muted">＝ビジター</span></div>
-      ${detail || '<p class="muted" style="font-size:13px">日付を押すと、その日の詳しい情報が見られます。</p>'}
+      ${detail || '<p class="muted" style="font-size:13px">日付を押すと、その日の詳しい情報が見られます。これからの日付なら、その日までスキップもできます。</p>'}
     </div>`;
   };
 
@@ -1938,6 +1946,9 @@
     calDay: (arg) => {
       ui.calDay = ui.calDay === arg ? null : arg;
       render();
+      // スマホでは詳細がカレンダーの下に隠れるので、見えるところまで動かす
+      const el = ui.calDay && document.querySelector('.cal-detail');
+      if (el && el.getBoundingClientRect().bottom > window.innerHeight) el.scrollIntoView({ behavior: 'smooth', block: 'end' });
     },
     logFilter: (arg) => {
       ui.logFilter = arg;
@@ -2075,6 +2086,14 @@
       render();
     },
     auto: () => handlers.autoGo('w4'),
+    calSkip: (arg) => {
+      const s = ui.s;
+      const t = G.skipTarget(s, arg);
+      if (!t || s.queue.length || s.gw) return;
+      ui.tab = 'action';
+      ui.calDay = null;
+      handlers.autoGo(t);
+    },
     approach: (arg) => {
       if (!ui.s.gw || ui.s.queue.length) return;
       G.stepGames(ui.s, arg);
