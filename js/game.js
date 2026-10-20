@@ -753,6 +753,7 @@
     // 日本球界の相場：WAR5で2〜3億円、MVP級で4〜6億円。最高でも7億円ほど
     let target = Math.min(70000, 600 + Math.pow(Math.max(0, war), 1.25) * 3000 + titles * 800 + p.popularity * 10);
     if (s.flags.pennant === s.year && p.squad === 'first') target += 500;
+    target = Math.max(440, G.filter('contractTarget', target, s)); // 査定ポイントなど
     const cur = p.salary;
     let next;
     if (target > cur) next = cur + (target - cur) * 0.6;
@@ -775,7 +776,7 @@
     s.queue.push({
       kind: 'contract',
       title: mlb ? '契約交渉' : '契約更改',
-      text: `${mlb ? '代理人を通じた契約交渉。' : '球団との契約更改交渉。'}\n\n今季：${G.fmtMoney(p.salary)}\n提示：${G.fmtMoney(offer)}（${sign}${G.fmtMoney(diff)}）${mlb ? `\n（${G.usdText(offer)}）` : ''}\n\n${G.seasonSummaryText(s)}`,
+      text: `${mlb ? '代理人を通じた契約交渉。' : '球団との契約更改交渉。'}\n\n今季：${G.fmtMoney(p.salary)}\n提示：${G.fmtMoney(offer)}（${sign}${G.fmtMoney(diff)}）${mlb ? `\n（${G.usdText(offer)}）` : ''}\n\n${G.seasonSummaryText(s)}${G.sateiText && G.sateiText(s) ? `\n${G.sateiText(s)}` : ''}`,
       canRetire: p.age >= 30,
       mlb,
     });

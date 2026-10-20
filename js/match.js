@@ -732,6 +732,7 @@
   G.finishGames = (s) => {
     const gw = s.gw;
     s.gw = null;
+    G.emit('games:finish', s, gw);
     keepWeek(s, gw);
     G.endWeek(s, gw);
   };

@@ -2642,3 +2642,215 @@ h3 {
 .jp-notes li + li {
   margin-top: 2px;
 }
+
+/* ---------- 査定・お立ち台 ---------- */
+.satei {
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 12px;
+  margin: 8px 0;
+  background: #fbfcf9;
+}
+.satei-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.satei-total {
+  font-size: 22px;
+  font-weight: 800;
+}
+.pos {
+  color: var(--good);
+}
+.neg {
+  color: var(--bad);
+}
+.satei-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.sat-chip {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+.sat-chip.pos {
+  border-color: #b6e2c6;
+  background: #effaf3;
+}
+.sat-chip.neg {
+  border-color: #f2c2c2;
+  background: #fdf0f0;
+}
+.sat-sum {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.sat-sum > div {
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+}
+.sat-sum small {
+  font-size: 11px;
+  color: var(--muted);
+}
+.sat-sum b {
+  font-size: 18px;
+}
+.sat-row {
+  display: grid;
+  grid-template-columns: 7.5em 1fr 3em;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+  margin: 3px 0;
+}
+.sat-row b {
+  text-align: right;
+}
+.sat-bar {
+  height: 10px;
+  border-radius: 999px;
+  background: #eef2ea;
+  overflow: hidden;
+}
+.sat-bar > div {
+  height: 100%;
+  border-radius: 999px;
+}
+.sat-bar .pos {
+  background: var(--good);
+}
+.sat-bar .neg {
+  background: var(--bad);
+}
+.hero-int {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin: 8px 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #fff7e0, #ffe9c2);
+  border: 1.5px solid #f2c96b;
+}
+.hero-int .grow {
+  flex: 1;
+  min-width: 0;
+}
+.hero-int p {
+  margin: 4px 0;
+  font-size: 14px;
+}
+.hero-int .q {
+  color: var(--muted);
+}
+.hero-int .a {
+  font-weight: bold;
+}
+.hero-int .act-grid {
+  margin-top: 6px;
+}
+.hero-face {
+  flex-shrink: 0;
+}
+
+/* ---------- 顔 ---------- */
+.face {
+  display: block;
+  border-radius: 50%;
+}
+.face-btn,
+.face-wrap {
+  position: relative;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  line-height: 0;
+}
+.face-btn {
+  cursor: pointer;
+}
+.face-btn:hover .face,
+.face-btn:focus-visible .face {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+.face-num {
+  position: absolute;
+  right: -4px;
+  bottom: -2px;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--team, var(--field-dark));
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 20px;
+  text-align: center;
+  border: 2px solid #fff;
+}
+.mate-head .face-num {
+  background: var(--field-dark);
+}
+.face-editor {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.face-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.face-rows {
+  flex: 1;
+  min-width: 220px;
+  display: grid;
+  gap: 4px;
+}
+.face-row {
+  display: grid;
+  grid-template-columns: 4.5em auto 1fr auto;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+}
+.face-row b {
+  text-align: center;
+}
+.face-row .lbl {
+  color: var(--muted);
+  font-size: 13px;
+}
+.face-modal {
+  max-width: 520px;
+}
+.slot-face {
+  flex-shrink: 0;
+  line-height: 0;
+}
+.person .row .grow {
+  flex: 1;
+  min-width: 0;
+}
+.person-face {
+  line-height: 0;
+  flex-shrink: 0;
+}

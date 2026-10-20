@@ -7,6 +7,7 @@
   const br = (t) => esc(t).replace(/\n/g, '<br>');
 
   const defaultCreate = () => ({
+    face: G.randomFace(),
     family: G.pick(G.SURNAMES),
     given: G.pick(G.MALE_NAMES),
     weapon: 'hitter',
@@ -47,7 +48,8 @@
     for (let i = 0; i < G.SLOTS; i++) {
       const s = slots[i];
       if (s) {
-        rows += `<div class="panel slot"><div class="info"><div class="muted" style="font-size:12px">スロット${i + 1}</div>${slotSummary(s)}</div>
+        const slotFace = G.faceSvg(s.player.face || G.randomFace(s.player.name, { age: 22 }), { size: 52, team: G.teamById(s.player.teamId) });
+        rows += `<div class="panel slot"><div class="slot-face">${slotFace}</div><div class="info"><div class="muted" style="font-size:12px">スロット${i + 1}</div>${slotSummary(s)}</div>
           <div class="btns"><button class="btn" data-act="continue" data-arg="${i}">${s.ended ? '記録を見る' : 'つづき'}</button>
           <span class="btns-row"><button class="btn sub small" data-act="exportSlot" data-arg="${i}">書き出す</button><button class="btn sub small" data-act="importSlot" data-arg="${i}">読み込む</button>
           <button class="btn danger small" data-act="delete" data-arg="${i}">削除</button></span></div></div>`;
@@ -73,6 +75,22 @@
       )
       .join('')}</div>`;
 
+  // 顔のエディター（新しい選手をつくるとき・あとから変えるとき）
+  const faceEditor = (f, team) =>
+    `<div class="face-editor"><div class="face-preview">${G.faceSvg(f, { size: 112, team })}<button class="btn sub small" data-act="faceRandom">ランダム</button></div>
+      <div class="face-rows">${G.FACE_KEYS.map(
+        (k) => `<div class="face-row"><span class="lbl">${G.FACE_LABELS[k]}</span><button class="btn sub small" data-act="faceStep" data-arg="${k}:-1" aria-label="${G.FACE_LABELS[k]}を前へ">◀</button><b>${esc(G.faceName(f, k))}</b><button class="btn sub small" data-act="faceStep" data-arg="${k}:1" aria-label="${G.FACE_LABELS[k]}を次へ">▶</button></div>`,
+      ).join('')}</div></div>`;
+
+  const faceModal = (s) => {
+    const p = s.player;
+    return `<div class="modal-back" data-act="faceCancel"><div class="modal face-modal" role="dialog" aria-modal="true" data-stop="1">
+      <div class="modal-title">顔を変える</div>
+      ${faceEditor(ui.faceEdit, G.teamById(p.teamId))}
+      <div class="modal-choices"><button class="btn" data-act="faceSave">これにする</button><button class="btn sub" data-act="faceCancel">やめる</button></div>
+    </div></div>`;
+  };
+
   const createView = () => {
     const c = ui.create;
     const hands = c.position === 'P' ? G.HANDS.filter((h) => h.id !== 'RS') : G.HANDS;
@@ -84,6 +102,7 @@
           <label class="name-part"><small>名前</small><input id="pgiven" maxlength="6" value="${esc(c.given)}" autocomplete="off" placeholder="例：太郎" /></label>
           <button class="btn sub small" data-act="randname">ランダム</button></div>
         <small class="muted">ファンやメディアからは苗字で呼ばれます。</small></div>
+      <div class="field"><span class="lbl">顔</span><small class="muted" style="display:block;margin:-2px 0 6px">入団後の帽子は球団の色になります。あとからでも変えられます。</small>${faceEditor(c.face, null)}</div>
       <div class="field"><span class="lbl">ポジション</span>${choiceGroup('position', G.POSITIONS, c.position)}</div>
       <div class="field"><span class="lbl">武器（特徴）</span><small class="muted" style="display:block;margin:-2px 0 6px">選手としての一番の売り。初期能力や特殊能力に反映されます。</small>${choiceGroup('weapon', G.weaponsFor(c.position), c.weapon)}</div>
       ${c.position === 'P' ? `<div class="field"><span class="lbl">希望の役割</span><small class="muted" style="display:block;margin:-2px 0 6px">先発・中継ぎ・抑えのどれで勝負するか。後からコーチに相談して変えることもできます。</small>${choiceGroup('prefRole', G.PREF_ROLES, c.prefRole || 'SP')}</div>` : ''}
@@ -144,7 +163,7 @@
     const tot = G.careerTotals(s);
     const career = G.isPitcher(p) ? `通算 ${tot.pit.w}勝 ${tot.pit.s}セーブ 防御率${G.fmtERA(tot.pit.er, tot.pit.outs)}` : `通算 ${tot.bat.h}安打 ${tot.bat.hr}本塁打 打率${G.fmtRate(tot.bat.h, tot.bat.ab)}`;
     return `<aside class="panel pcard" style="--team:${team.color}">
-      <div class="head"><div class="num">OB</div><div><div class="pname">${esc(p.name)}</div>
+      <div class="head"><button class="face-btn" data-act="faceEdit" title="顔を変える" aria-label="顔を変える">${G.faceSvg(G.ensureFace(p), { size: 56, team })}<span class="face-num">OB</span></button><div><div class="pname">${esc(p.name)}</div>
       <div class="sub">${p.age}歳・引退して${s.year - s.after.startYear + 1}年目</div></div></div>
       <div class="tags"><span class="tag first">${esc(G.afterRank(s))}</span><span class="tag">元${esc(team.short)}</span></div>
       <div class="bars">
@@ -178,7 +197,7 @@
     const cond = G.CONDITIONS[p.condition];
     const growth = G.GROWTH_TYPES.find((g) => g.id === p.growth);
     return `<aside class="panel pcard" style="--team:${team.color}">
-      <div class="head"><div class="num">${p.number}</div><div><div class="pname">${esc(p.name)}</div>
+      <div class="head"><button class="face-btn" data-act="faceEdit" title="顔を変える" aria-label="顔を変える">${G.playerFace(s, 56)}<span class="face-num">${p.number}</span></button><div><div class="pname">${esc(p.name)}</div>
       <div class="sub">${G.positionName(p)}・${hand.name}・${p.age}歳・プロ${p.yearsPro + 1}年目</div></div></div>
       <div class="tags">
         <span class="tag ${p.squad}">${G.squadName(p)}</span>
@@ -408,6 +427,30 @@
     return `<div class="clutch-result ${v.cls}"><div class="muted">🔥 ${esc(c.situation.head)}・「${esc(c.choice)}」</div><b>${esc(v.text)}</b></div>`;
   };
 
+  // 今日の査定
+  const sateiHtml = (s, r) => {
+    if (!r.satei) return '';
+    const t = r.satei.total;
+    const ss = G.seasonSatei(s);
+    const chips = r.satei.items
+      .map((x) => `<span class="sat-chip ${x.v > 0 ? 'pos' : 'neg'}">${esc(x.label)}${x.n > 1 ? `×${x.n}` : ''} ${x.v > 0 ? '+' : ''}${x.v}</span>`)
+      .join('');
+    return `<div class="satei"><div class="satei-head"><b>📋 今日の査定</b><span class="satei-total ${t >= 0 ? 'pos' : 'neg'}">${t > 0 ? '+' : ''}${t}</span><small class="muted">今季の合計 ${ss.total > 0 ? '+' : ''}${Math.round(ss.total)}</small></div><div class="satei-chips">${chips}</div></div>`;
+  };
+
+  // お立ち台（ヒーローインタビュー）
+  const interviewHtml = (s, r) => {
+    const it = r.interview;
+    if (!it) return '';
+    const face = `<div class="hero-face">${G.playerFace(s, 64)}</div>`;
+    if (it.said) {
+      const st = G.HERO_STYLES.find((x) => x.id === it.said);
+      return `<div class="hero-int said">${face}<div><b>🎤 お立ち台</b><p class="q">アナウンサー「${esc(it.q)}」</p><p class="a">${esc(st.label)}</p><p class="muted">${esc(it.reply)}</p></div></div>`;
+    }
+    return `<div class="hero-int">${face}<div class="grow"><b>🎤 お立ち台に呼ばれた！${it.n === 1 ? '（プロ初！）' : `（通算${it.n}回目）`}</b><p class="q">アナウンサー「${esc(it.q)}」</p>
+      <div class="act-grid">${G.HERO_STYLES.map((h, i) => `<button class="act rest" data-act="heroSay" data-arg="${i}"><b>${esc(h.label)}</b><small>${esc(h.desc)}</small></button>`).join('')}</div></div></div>`;
+  };
+
   const resultView = (s) => {
     const r = s.gw.last;
     const mark = r.outcome === 'W' ? '勝利' : r.outcome === 'L' ? '敗戦' : '引き分け';
@@ -437,7 +480,9 @@
       <div class="game-date ${r.special ? 'jp-game' : ''}">${G.fmtDate(r.date)}${r.special ? `・🇯🇵 ${esc(r.special.title)}（${esc(r.special.venue)}）` : r.inter ? '・交流戦' : ''}</div>
       <div class="game-head"><b class="res-${r.outcome}">${mark}</b> ${r.score[0]} - ${r.score[1]} <span class="muted">vs ${G.teamById(r.oppId).name}・作戦「${ap.name}」</span></div>
       ${clutchResult(s, r)}
+      ${interviewHtml(s, r)}
       ${boxHtml(r.box)}
+      ${sateiHtml(s, r)}
       ${extra.length ? `<ul class="jp-notes">${extra.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
       ${read}${detail}
       <div class="muted" style="font-size:13px">${week}</div>
@@ -838,6 +883,28 @@
   const pitHead = (first = '') =>
     `<tr><th>${first}</th><th>登板</th><th>先発</th><th>勝</th><th>敗</th><th>S</th><th>H</th><th>投球回</th><th>被安打</th><th>奪三振</th><th>四球</th><th>失点</th><th>自責</th><th>防御率</th></tr>`;
 
+  // 査定ポイント（1軍の試合ごとの貢献。契約更改に響く）
+  const sateiView = (s) => {
+    const ss = s.satei && s.satei.year === s.year ? s.satei : null;
+    const hist = Object.entries(s.sateiHist || {}).sort((a, b) => b[0] - a[0]).slice(0, 6);
+    if (!ss && !hist.length) return '';
+    let cur = '<p class="muted" style="font-size:13px">今季はまだ1軍の試合に出ていない。</p>';
+    if (ss && ss.games) {
+      const max = Math.max(10, ...G.SATEI_CATS.map((c) => Math.abs(ss.cat[c.id] || 0)));
+      const rows = G.SATEI_CATS.filter((c) => ss.cat[c.id])
+        .map((c) => {
+          const v = ss.cat[c.id];
+          return `<div class="sat-row"><span>${c.name}</span><div class="sat-bar"><div class="${v >= 0 ? 'pos' : 'neg'}" style="width:${Math.min(100, (Math.abs(v) / max) * 100)}%"></div></div><b class="${v >= 0 ? 'pos' : 'neg'}">${v > 0 ? '+' : ''}${Math.round(v)}</b></div>`;
+        })
+        .join('');
+      const diff = Math.round(ss.total - G.SATEI_PAR);
+      cur = `<div class="sat-sum"><div><small>今季の合計</small><b class="${ss.total >= 0 ? 'pos' : 'neg'}">${ss.total > 0 ? '+' : ''}${Math.round(ss.total)}</b></div><div><small>出場${ss.games}試合・1試合平均</small><b>${(ss.total / ss.games).toFixed(1)}</b></div><div><small>最高の試合</small><b>${ss.best ? `+${ss.best.total}` : '-'}</b></div></div>
+        ${rows}<p class="muted" style="font-size:12px;margin:6px 0 0">契約更改では、ふつうのレギュラー（+${G.SATEI_PAR}）より${diff >= 0 ? `${diff}多い分が上積み` : `${-diff}少ない分が減額`}の材料になる。</p>`;
+    }
+    const histHtml = hist.length ? `<div class="muted" style="font-size:12px;margin-top:4px">これまで：${hist.map(([y, h]) => `${y}年 ${h.total > 0 ? '+' : ''}${h.total}`).join('・')}</div>` : '';
+    return `<h3 class="mt">査定ポイント</h3>${cur}${histHtml}`;
+  };
+
   // 日本代表の記録
   const intlView = (s) => {
     const hist = s.intlHist || [];
@@ -924,7 +991,7 @@
         <div class="tbl-wrap"><table class="stats">${fh}${fr('今季', s.stats.fld || G.emptyFld(), 'me')}${yrs}${yrs ? fr('通算', tot.fld, 'total') : ''}</table></div>
         <p class="muted" style="font-size:12px;margin-top:-8px">守備得点：平均的な守備と比べて何点防いだか（プラスほど良い）。守備の評価は打順・スタメン争いやゴールデングラブ賞にも影響する。</p>`;
     }
-    return `<div class="panel"><h3>${s.year}年 今季成績</h3>${cur}${defense}${raceView(s)}${intlView(s)}${career}</div>`;
+    return `<div class="panel"><h3>${s.year}年 今季成績</h3>${cur}${defense}${sateiView(s)}${raceView(s)}${intlView(s)}${career}</div>`;
   };
 
   const teamTab = (s) => {
@@ -1238,7 +1305,8 @@
       const aff = Math.round(st.aff || 0);
       return wrap(
         `${esc(st.name)} <span class="tag friend">${esc(st.role)}</span>`,
-        `<dl class="kv mate-kv"><dt>年齢</dt><dd>${st.age}歳</dd><dt>経歴</dt><dd>${esc(st.bio)}</dd>
+        `<div class="mate-head"><div class="face-wrap">${G.npcFace(st.name, { size: 56, teamId: 'n_jpn', age: st.age })}</div><div><b>${esc(st.role)}</b><div class="muted" style="font-size:13px">${esc(st.bio)}</div></div></div>
+        <dl class="kv mate-kv"><dt>年齢</dt><dd>${st.age}歳</dd><dt>経歴</dt><dd>${esc(st.bio)}</dd>
           ${style ? `<dt>タイプ</dt><dd>${esc(style.name)}<small class="muted">（${esc(style.desc)}）</small></dd>` : ''}
           <dt>あなたとの仲</dt><dd><div class="bar aff"><div class="track"><div class="fill" style="width:${Math.min(100, aff)}%;background:#3b8ee0"></div></div><span class="val">${aff}</span></div>${st.key !== 'manager' ? '<small class="muted">信頼されると、首脳陣のミーティングで推してくれる</small>' : ''}</dd></dl>
         <div class="section-title" style="margin-top:6px">話しかける</div><div class="act-grid">${topics}</div>`,
@@ -1259,7 +1327,7 @@
       .join('');
     return wrap(
       `${esc(x.name)} ${jpTags(s, x)}`,
-      `<div class="mate-head"><div class="num jp">${esc(G.jpPosName(x).slice(0, 2))}</div><div><b>${esc(G.jpTeamName(x))}・${x.age}歳</b><div class="muted" style="font-size:13px">${esc(G.jpPosName(x))}・総合 ${G.rank(x.rating)}・代表${(x.caps || 0) + 1}回目${x.withYou && x.withYou.length ? `（${x.withYou.join('・')}年に一緒だった）` : ''}</div></div></div>
+      `<div class="mate-head"><div class="face-wrap">${G.npcFace(x.name, { size: 56, teamId: 'n_jpn', age: x.age })}</div><div><b>${esc(G.jpTeamName(x))}・${x.age}歳</b><div class="muted" style="font-size:13px">${esc(G.jpPosName(x))}・総合 ${G.rank(x.rating)}・代表${(x.caps || 0) + 1}回目${x.withYou && x.withYou.length ? `（${x.withYou.join('・')}年に一緒だった）` : ''}</div></div></div>
       <dl class="kv mate-kv"><dt>昨季</dt><dd>${esc(x.last || '-')}</dd>
         <dt>性格</dt><dd>${known ? `${per.name}<small class="muted">（${per.hint}）</small>` : '？（何度か話すとわかる）'}</dd>
         <dt>あなたとの仲</dt><dd><div class="bar aff"><div class="track"><div class="fill" style="width:${Math.min(100, aff)}%;background:#3b8ee0"></div></div><span class="val">${aff}</span></div><small class="muted">${level}${friend ? '（人間関係に登録済み）' : `・仲${G.FRIEND_AFF}で人間関係に加わる`}</small></dd></dl>
@@ -1284,11 +1352,23 @@
         })
         .join('')}</ol>`;
     };
+    // 顔を出すのは、野球でつながった人たち
+    const faceOf = (x) => {
+      if (x.group === 'japan') return G.npcFace(x.name, { size: 36, teamId: 'n_jpn' });
+      if (x.id === 'rival') {
+        const rv = s.draft && s.draft.picks.find((d) => d.id === s.draft.rivalId);
+        return G.npcFace(x.name, { size: 36, teamId: rv && !rv.retired ? rv.teamId : null });
+      }
+      if (x.group === 'mate' || ['senpai', 'kohai'].includes(x.id)) return G.npcFace(x.name, { size: 36, teamId: s.player.teamId });
+      if (x.id === 'coach') return G.npcFace(x.name, { size: 36, teamId: s.player.teamId, age: 52 });
+      return '';
+    };
     const card = (x, extra = '') => {
       const stage = x.group === 'love' ? G.STAGE_NAME[x.stage] : '';
       if (x.group !== 'love') extra += chainHtml(x.id);
+      const fc = faceOf(x);
       return `<div class="person ${x.group === 'love' ? 'love' : ''}">
-        <div class="row"><b>${esc(x.name)}</b>${stage ? `<span class="tag ${x.stage}">${stage}</span>` : ''}</div>
+        <div class="row">${fc ? `<span class="person-face">${fc}</span>` : ''}<b class="grow">${esc(x.name)}</b>${stage ? `<span class="tag ${x.stage}">${stage}</span>` : ''}</div>
         <small class="muted">${esc(x.role)}${x.retired && x.id === 'rival' ? '（引退）' : ''}</small>
         <div class="bar aff"><span>${x.group === 'love' ? '好感度' : '親密度'}</span>${affBar(x)}<span class="val">${Math.round(x.aff)}</span></div>${extra}</div>`;
     };
@@ -1740,7 +1820,7 @@
     const tagName = G.mateTag(m);
     return `<div class="modal-back" data-act="mateClose"><div class="modal mate-modal" role="dialog" aria-modal="true" data-stop="1">
       <div class="modal-title">${esc(m.name)} ${tagName ? `<span class="tag friend">${tagName}</span>` : ''}</div>
-      <div class="mate-head"><div class="num">${m.number}</div><div><b>${G.posById(m.pos).name}・${m.age}歳</b><div class="muted" style="font-size:13px">${G.TEAM_ROLE_NAME[m.role] || ''}・総合 ${G.rank(m.rating)}</div></div></div>
+      <div class="mate-head"><div class="face-wrap">${G.npcFace(m.name, { size: 56, teamId: s.player.teamId, age: m.age })}<span class="face-num">${m.number}</span></div><div><b>${G.posById(m.pos).name}・${m.age}歳</b><div class="muted" style="font-size:13px">${G.TEAM_ROLE_NAME[m.role] || ''}・総合 ${G.rank(m.rating)}</div></div></div>
       <dl class="kv mate-kv"><dt>能力</dt><dd>${prof}</dd><dt>今季</dt><dd>${season}</dd><dt>昨季</dt><dd>${last}</dd>
         <dt>性格</dt><dd>${info.known ? `${per.name}<small class="muted">（${per.hint}）</small>` : '？（何度か話すとわかる）'}</dd>
         <dt>あなたとの仲</dt><dd><div class="bar aff"><div class="track"><div class="fill" style="width:${Math.min(100, aff)}%;background:#3b8ee0"></div></div><span class="val">${aff}</span></div><small class="muted">${level}${info.person ? '（人間関係に登録済み）' : `・仲${G.FRIEND_AFF}で人間関係に加わる`}</small></dd></dl>
@@ -1797,6 +1877,7 @@
     else html = titleView();
     if (ui.screen === 'game' && ui.mate && ui.s && !ui.s.queue.length) html += mateModal(ui.s);
     if (ui.screen === 'game' && ui.jp && ui.s && !ui.s.queue.length) html += jpModal(ui.s);
+    if (ui.screen === 'game' && ui.faceEdit && ui.s && !ui.s.queue.length) html += faceModal(ui.s);
     if (ui.screen === 'title' && ui.io) html += ioModal();
     if (ui.confirm) {
       html += `<div class="modal-back"><div class="modal" role="dialog" aria-modal="true">
@@ -1930,6 +2011,7 @@
       }
       const name = `${family} ${given}`;
       ui.s = G.newGame({ ...ui.create, name }, ui.slot);
+      ui.s.player.face = { ...ui.create.face };
       ui.tab = 'action';
       ui.screen = 'game';
       save();
@@ -1998,6 +2080,41 @@
     mateClose: (arg, el, e) => {
       ui.mate = null;
       ui.mateMsg = null;
+      render();
+    },
+    faceStep: (arg) => {
+      const [k, d] = arg.split(':');
+      const f = ui.screen === 'create' ? ui.create.face : ui.faceEdit;
+      if (!f) return;
+      G.faceStep(f, k, Number(d));
+      render();
+    },
+    faceRandom: () => {
+      if (ui.screen === 'create') ui.create.face = G.randomFace();
+      else if (ui.faceEdit) ui.faceEdit = { ...G.randomFace(), cap: ui.faceEdit.cap };
+      render();
+    },
+    faceEdit: () => {
+      ui.faceEdit = { ...G.ensureFace(ui.s.player) };
+      render();
+    },
+    faceSave: () => {
+      ui.s.player.face = { ...ui.faceEdit };
+      ui.faceEdit = null;
+      save();
+      toast('顔を変えた！');
+      render();
+    },
+    faceCancel: () => {
+      ui.faceEdit = null;
+      render();
+    },
+    heroSay: (arg) => {
+      const s = ui.s;
+      if (!s.gw || !s.gw.last) return;
+      G.heroSay(s, s.gw.last, Number(arg));
+      G.checkAch(s);
+      save();
       render();
     },
     jpMember: (arg) => {

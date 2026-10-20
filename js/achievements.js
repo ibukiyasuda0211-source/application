@@ -242,6 +242,12 @@
   T('jsmvp', '日本シリーズMVP', '頂上決戦の主役になった');
   A('title', 'allstar', 'オールスター出場', 'ファン投票・監督推薦で選ばれた', (c) => (c.s.flags.allstarCount || 0) >= 1);
   A('title', 'allstar5', 'オールスター常連', 'オールスターに5回出場', (c) => (c.s.flags.allstarCount || 0) >= 5);
+  A('title', 'hero1', 'お立ち台デビュー', '初めてお立ち台でヒーローインタビューを受けた', (c) => (c.s.story.heroInterviews || 0) >= 1);
+  A('title', 'hero10', 'お立ち台の常連', 'お立ち台に10回上がった', (c) => (c.s.story.heroInterviews || 0) >= 10);
+  A('title', 'hero50', 'ヒーローの中のヒーロー', 'お立ち台に50回上がった', (c) => (c.s.story.heroInterviews || 0) >= 50, { hidden: true });
+  A('title', 'fanstyle', '最高でーす！', 'お立ち台で「最高でーす！」と10回叫んだ', (c) => ((c.s.story.heroStyle || {}).fan || 0) >= 10);
+  A('title', 'boldok', '有言実行', '「明日も打ちます！」と宣言して、翌日の試合で結果を出した', (c) => (c.s.flags.boldOk || 0) >= 1);
+  A('season', 'satei200', '査定の鬼', '1シーズンの査定ポイントが+200を超えた', (c) => !!(c.s.satei && c.s.satei.year === c.s.year && c.s.satei.total >= 200) || Object.values(c.s.sateiHist || {}).some((h) => h.total >= 200));
   A('title', 'allstar10', 'ミスター・オールスター', 'オールスターに10回出場', (c) => (c.s.flags.allstarCount || 0) >= 10);
   A('title', 'titles3', 'タイトルホルダー', 'タイトル・表彰を通算3つ', (c) => c.awardCount >= 3);
   A('title', 'titles10', '球界の顔', 'タイトル・表彰を通算10', (c) => c.awardCount >= 10);
