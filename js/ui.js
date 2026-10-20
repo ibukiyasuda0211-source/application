@@ -60,7 +60,7 @@
       }
     }
     return `<div class="title-screen">
-      <div class="logo"><div class="ball">⚾</div><h1>ダイヤモンド・ライフ</h1><p>〜 プロ野球人生シミュレーション 〜</p></div>
+      <div class="logo"><div class="ball">⚾</div><h1>ダイヤモンド・ライフ</h1><p>〜 プロ野球人生シミュレーション 〜</p>${G.EDITION ? `<p class="edition">${esc(G.EDITION)}</p>` : ''}</div>
       <div class="slots">${rows}</div>
       <div class="credit">ドラフト指名から引退まで、ひとりの野球選手の人生を体験しよう。<br>セーブデータはこのブラウザに保存されます。ブラウザのデータを消すと失われるので、ときどき「書き出す」でファイルに保管しておくと安心です（別の端末に移すときも「書き出す」→「読み込む」）。</div>
     </div>`;
@@ -1045,7 +1045,7 @@
     const meP = G.isPitcher(p) && !s.retired ? `<tr class="me"><td style="text-align:left">${esc(p.name)}（あなた）</td><td>${p.squad === 'first' ? G.roleName(p) : G.squadName(p)}</td><td>${p.age}</td><td>${rankBadge(Math.round(G.overall(p)))}</td><td>${p.pitcher.velocity}km/h</td><td style="text-align:left">${pitStat(s.stats.pit)}</td></tr>` : '';
     const departed = R.departed && R.departed.length ? `<p class="muted" style="font-size:13px">昨オフにチームを去った選手：${R.departed.map((d) => `${esc(d.name)}（${esc(d.why)}）`).join('、')}</p>` : '';
     return `<div class="panel">
-      <h3><span class="team-chip" style="background:${team.color}">${team.short}</span> ${team.name}</h3>
+      <h3><span class="team-chip" style="background:${team.color}">${team.short}</span> ${team.name}${team.manager ? `<small class="muted" style="font-size:13px;margin-left:8px">監督：${esc(team.manager)}</small>` : ''}</h3>
       <p class="muted" style="font-size:13px;margin-top:-4px">選手の名前を押すと、くわしい情報を見たり話しかけたりできる（週${G.TALKS_PER_WEEK}回まで）。仲良くなると「人間関係」に加わる。親しくできるのは${G.friendCap(s)}人まで（いま${G.mateFriends(s).length}人）。</p>
       ${rivalBox}
       <h3 class="mt">いまのスタメン</h3>

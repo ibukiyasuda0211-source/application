@@ -114,6 +114,20 @@ Node.js があれば、追加のインストールなしで動きます。
 | `npm run balance` | おまかせで何十人分もの野球人生を走らせ、通算成績・タイトル・お金・充実度の分布を表示する（`npm run balance -- 100` で人数指定） |
 | `npm run build` | すべてを1ファイルにまとめた `dist/diamond-life.html` をつくる |
 
+### 自分だけで遊ぶ版（アドオン）
+
+球団名・監督・選手などを差し替える「アドオン」を足して、別の版をつくれる（ゲームの仕組みは同じ）。見本は `tests/fixtures/addon-sample.js`（名前はすべて架空）。
+
+```bash
+node tools/build.js 出力先.html --with アドオン.js --title "題名"   # 1ファイルにまとめる
+ADDON=アドオン.js npm test                                          # すべてのテストをアドオン入りで
+```
+
+- アドオンで使える合図：`roster:generated`（チームの名簿）、`oppName`（相手の先発・リリーフ・打者の名前）、`leaders`（タイトル争いのライバル）、`japan:init`（代表の常連と監督）、`newGame`
+- 球団には `manager`（監督の名前。「〇〇監督」と呼ばれる）と `mark`（帽子のマーク）を足せる
+- `G.SAVE_KEY` を変えるとセーブが別になり、`G.EDITION` はタイトル画面に出る
+- 公開しないアドオンは `private/` に置く（Git には入らない）
+
 ### バランスの目安
 
 `npm run balance` で「おまかせ」60人分を走らせた結果（中央値）。自分で丁寧に育てれば、これより上を目指せる前提です。

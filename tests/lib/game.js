@@ -6,7 +6,10 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..', '..');
 
 // index.html と同じ順番でスクリプトを読み込み、新しい G を返す（画面の ui.js は除く）
-function load() {
+// extra：追加で読み込むファイル（build.js の --with と同じく、最後に読み込む）
+// 環境変数 ADDON=ファイル.js を付けて npm test すると、すべてのテストをそのアドオン入りで行う
+function load(extra = []) {
+  if (process.env.ADDON) extra = [...process.env.ADDON.split(','), ...extra];
   const store = {};
   const ctx = {
     localStorage: {
@@ -26,6 +29,7 @@ function load() {
   const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   const order = html.match(/js\/(\w+)\.js/g).map((x) => x.slice(3, -3)).filter((x) => x !== 'ui');
   for (const f of order) vm.runInContext(fs.readFileSync(path.join(ROOT, 'js', `${f}.js`), 'utf8'), ctx, { filename: `js/${f}.js` });
+  for (const f of extra) vm.runInContext(fs.readFileSync(path.isAbsolute(f) ? f : path.join(ROOT, f), 'utf8'), ctx, { filename: f });
   return ctx.G;
 }
 

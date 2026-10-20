@@ -81,6 +81,7 @@
       if (m.pos !== 'P') for (const k in m.prof) m.prof[k] = G.clamp(Math.round(m.rating + G.gauss(0, 8)), 10, 99);
     }
     s.roster = { teamId: p.teamId, year: s.year, players };
+    G.emit('roster:generated', s, s.roster); // 実在の選手データなどで名簿を差し替えられる
     G.assignPitchRoles(s);
     G.assignTeamRoles(s);
   };

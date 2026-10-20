@@ -167,7 +167,7 @@
       const paMid = () => (G.chance(0.3) ? 5 : 4);
       const paLow = () => (G.chance(0.15) ? 3 : G.chance(0.12) ? 5 : 4);
       const nPA = starter ? (slot <= 2 ? paTop() : slot <= 5 ? paMid() : paLow()) : G.chance(0.35) ? 1 : 0;
-      const oppP = { name: G.randomMaleName(), type: G.pick(G.OPP_PITCHERS).id };
+      const oppP = { name: G.filter('oppName', G.randomMaleName(), s, oppId, 'SP'), type: G.pick(G.OPP_PITCHERS).id };
       if (nPA) {
         Object.assign(ctx, { kind: 'bat', nPA, starter, order: starter ? `${slot}番${spot ? '（休養日の代役）' : ''}` : '代打', oppP });
       } else if (p.batter.fielding >= 66 && G.chance(0.3)) {
@@ -487,19 +487,20 @@
     };
     const me = p.name;
     const line = res.kind === 'pit' ? res.line : {};
+    const oppP = (role) => G.filter('oppName', G.randomMaleName(), s, res.oppId, role);
     let w;
     let l;
     let sv = null;
     if (res.outcome === 'W') {
       w = line.w ? me : mate(G.chance(0.6) ? 'SP' : null);
-      l = G.randomMaleName();
+      l = oppP(G.chance(0.6) ? 'SP' : 'RP');
       if (line.s) sv = me;
       else if (ours - theirs <= 3 && G.chance(0.65)) sv = mate('CL');
       if (sv === w) sv = null;
     } else if (res.outcome === 'L') {
       l = line.l ? me : mate(G.chance(0.6) ? 'SP' : null);
-      w = G.randomMaleName();
-      if (theirs - ours <= 3 && G.chance(0.6)) sv = G.randomMaleName();
+      w = oppP(G.chance(0.6) ? 'SP' : 'RP');
+      if (theirs - ours <= 3 && G.chance(0.6)) sv = oppP('CL');
     }
     // 本塁打（自分の分は通算何号かも）
     const hrs = [];

@@ -110,6 +110,7 @@
   };
   const capMark = (team) => {
     if (!team) return '';
+    if (team.mark) return team.mark;
     if (team.id === 'n_jpn') return 'J';
     return team.league === 'mlb' ? team.short.slice(0, 2) : team.short.slice(0, 1);
   };

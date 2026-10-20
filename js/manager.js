@@ -188,7 +188,7 @@
     u.farmForm = [];
     s.flags.downUntil = s.dayCount + 10;
     const down = G.squadName(p, 'second');
-    G.scene(s, '登録抹消', `${reason}\n\n監督「しばらく${down}で自分の形を取り戻してこい」\n\n出場選手登録を抹消された。再登録は10日後から。`);
+    G.scene(s, '登録抹消', `${reason}\n\n${G.mgrLabel(s)}「しばらく${down}で自分の形を取り戻してこい」\n\n出場選手登録を抹消された。再登録は10日後から。`);
     usageLog(s, `${down}降格（登録抹消）。${reason}`, 'bad');
     G.buzz(s, 'demote');
     G.addHappy(s, -6);
@@ -258,7 +258,7 @@
       u.slot = null;
       u.benchGames = 0;
       u.sinceChange = 0;
-      G.scene(s, 'スタメン落ち', `直近10試合で失策${v.recentE}。\n監督「守りでリズムを崩している。少しベンチで頭を冷やせ」`);
+      G.scene(s, 'スタメン落ち', `直近10試合で失策${v.recentE}。\n${G.mgrLabel(s)}「守りでリズムを崩している。少しベンチで頭を冷やせ」`);
       usageLog(s, `守備のミスが続き、スタメンを外れた（直近10試合で失策${v.recentE}）`, 'bad');
       G.buzz(s, 'bench');
       G.addHappy(s, -4);
@@ -287,7 +287,7 @@
         u.slot = null;
         u.benchGames = 0;
         u.sinceChange = 0;
-        G.scene(s, 'スタメン落ち', `試合前のミーティング。スタメン表に自分の名前がなかった。\n\n${formTxt ? `${formTxt}。` : ''}監督「少しベンチから試合を見てみろ」`);
+        G.scene(s, 'スタメン落ち', `試合前のミーティング。スタメン表に自分の名前がなかった。\n\n${formTxt ? `${formTxt}。` : ''}${G.mgrLabel(s)}「少しベンチから試合を見てみろ」`);
         usageLog(s, `スタメンを外れた（${formTxt || '不振'}）`, 'bad');
         G.buzz(s, 'bench');
         G.addHappy(s, -4);
@@ -332,7 +332,7 @@
           p.role = 'RP';
           p.rpRank = 'mid';
           u.form = [];
-          G.scene(s, '配置転換', `直近3試合の先発で防御率${era3.toFixed(2)}。\n監督「しばらく中継ぎで調子を取り戻してくれ」`);
+          G.scene(s, '配置転換', `直近3試合の先発で防御率${era3.toFixed(2)}。\n${G.mgrLabel(s)}「しばらく中継ぎで調子を取り戻してくれ」`);
           usageLog(s, '先発ローテーションを外れ、中継ぎへ', 'bad');
         } else demote(s, `直近3試合の先発で防御率${era3.toFixed(2)}と打ち込まれた。`);
       }
@@ -343,7 +343,7 @@
         p.role = 'RP';
         p.rpRank = 'setup';
         u.form = [];
-        G.scene(s, '配置転換', `直近の登板でセーブ失敗が続いた。\n監督「しばらく8回を任せる。抑えは他の投手でいく」`);
+        G.scene(s, '配置転換', `直近の登板でセーブ失敗が続いた。\n${G.mgrLabel(s)}「しばらく8回を任せる。抑えは他の投手でいく」`);
         usageLog(s, '抑えを外れ、セットアッパーへ', 'bad');
       }
       return;
@@ -357,7 +357,7 @@
       if (p.rpRank === 'setup' && v.val <= bar - 1 && G.chance(0.2)) {
         p.role = 'CL';
         u.sinceChange = 0;
-        G.scene(s, '守護神に抜擢', `安定した投球が評価され、抑えを任されることになった！\n監督「9回はお前に託す」`, { big: '守護神' });
+        G.scene(s, '守護神に抜擢', `安定した投球が評価され、抑えを任されることになった！\n${G.mgrLabel(s)}「9回はお前に託す」`, { big: '守護神' });
         usageLog(s, '抑えに抜擢された', 'good');
       } else if (i < 2) {
         p.rpRank = order[i + 1];
@@ -432,7 +432,7 @@
     const first = !s.flags.firstPromotion;
     s.flags.firstPromotion = true;
     const up = G.squadName(p, 'first');
-    G.scene(s, `${up}昇格！`, `${note ? note + '\n' : ''}${first ? `監督「${p.name}、明日から${up}だ。思い切ってやってこい！」\n\nついに念願の${up}昇格！` : `再び${up}に呼ばれた！今度こそ結果を残すぞ！`}\n（${role}）`, { big: `${up}昇格` });
+    G.scene(s, `${up}昇格！`, `${note ? note + '\n' : ''}${first ? `${G.mgrLabel(s)}「${p.name}、明日から${up}だ。思い切ってやってこい！」\n\nついに念願の${up}昇格！` : `再び${up}に呼ばれた！今度こそ結果を残すぞ！`}\n（${role}）`, { big: `${up}昇格` });
     usageLog(s, `${up}に昇格（${role}）`, 'good');
     G.buzz(s, 'promote');
     if (first) s.history.push({ year: s.year, text: '初の1軍昇格' });
@@ -476,11 +476,11 @@
     let detail = v.formPA >= 15 ? `直近${Math.min(FORM_GAMES, u.form.length)}試合 打率${fmt(v.formAvg)}・OPS ${fmt(v.formOPS)}` : 'まだ打席が少ない';
     if (v.recentE || v.recentFine) detail += `／守備 失策${v.recentE}・好守${v.recentFine}`;
     let mood;
-    if (u.status === 'bench') mood = '監督「もう少しベンチで見ていろ」';
-    else if (u.trial > 0) mood = '監督「しばらくは我慢して使う」';
-    else if (v.recentE >= 3) mood = '監督「守備をなんとかしろ」';
+    if (u.status === 'bench') mood = `${G.mgrLabel(s)}「もう少しベンチで見ていろ」`;
+    else if (u.trial > 0) mood = `${G.mgrLabel(s)}「しばらくは我慢して使う」`;
+    else if (v.recentE >= 3) mood = `${G.mgrLabel(s)}「守備をなんとかしろ」`;
     else if (v.formOPS !== null && v.formOPS < 0.5) mood = '監督の信頼が揺らいでいる…';
-    else if (v.formOPS !== null && v.formOPS >= 0.9) mood = '監督「今のお前は外せない」';
+    else if (v.formOPS !== null && v.formOPS >= 0.9) mood = `${G.mgrLabel(s)}「今のお前は外せない」`;
     else mood = '';
     return { role, detail, mood };
   };

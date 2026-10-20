@@ -10,12 +10,12 @@
     { v: '二塁', n: 1, weight: 1 },
   ];
 
-  // 自分と同じ苗字にならない相手の名前
-  const otherName = (s) => {
+  // 自分と同じ苗字にならない相手の名前（実在の選手データなどで差し替えられる：合図 oppName）
+  const otherName = (s, oppId, role) => {
     const fam = s.player.name.split(' ')[0];
     let n = G.randomMaleName();
     for (let i = 0; i < 20 && n.split(' ')[0] === fam; i++) n = G.randomMaleName();
-    return n;
+    return G.filter('oppName', n, s, oppId, role);
   };
 
   // 試合の前に「勝負どころが来るか」を決めておく（prepareDay でホーム／ビジターが決まったあと）
@@ -31,14 +31,14 @@
       if (b.n === 3) diff = G.pick([-1, -1, -2, 0]);
       else if (b.n === 2) diff = G.pick([-1, -1, 0]);
       else diff = G.pick([0, -1]);
-      own.clutch = { type: 'bat', inning, bottom: !!own.home, bases: b.v, runners: b.n, diff, pinch, reliever: otherName(s) };
+      own.clutch = { type: 'bat', inning, bottom: !!own.home, bases: b.v, runners: b.n, diff, pinch, reliever: otherName(s, own.oppId, 'RP') };
     } else if (own.kind === 'pit' && own.role !== 'SP' && own.pre === 'W' && own.lead <= 3) {
       const rank = own.role === 'CL' ? 'CL' : s.player.rpRank;
       const pr = rank === 'CL' ? 0.3 : rank === 'setup' ? 0.2 : 0.12;
       if (!G.chance(Math.min(0.8, pr * (own.clutchBoost || 1)))) return;
       const b = G.chance(0.6) ? BASES[0] : BASES[1];
       const inning = Number((own.situation.match(/^(\d)回/) || [0, 9])[1]);
-      own.clutch = { type: 'pit', inning, bottom: !own.home, bases: b.v, runners: b.n, lead: own.lead, batter: otherName(s) };
+      own.clutch = { type: 'pit', inning, bottom: !own.home, bases: b.v, runners: b.n, lead: own.lead, batter: otherName(s, own.oppId, 'B') };
     }
   };
 

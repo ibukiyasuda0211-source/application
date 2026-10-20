@@ -153,6 +153,7 @@
       x.rating = Math.min(94, x.rating + 3);
       x.team = G.pick(G.MLB_TEAMS).id;
     }
+    G.emit('japan:init', s, s.japan); // 実在の代表選手データなどで差し替えられる
     return s.japan;
   };
 
@@ -183,8 +184,9 @@
         for (let k = have; k < n; k++) J.pool.push(genMember(s, pos, prole, { age: G.ri(21, 25), rating: 72 }));
       }
     }
-    // 自分と同じ球団の選手はいない（チームの名簿と食い違わないように）
-    for (const x of J.pool) if (!x.mlb && x.team === s.player.teamId) x.team = otherNpbTeam(s);
+    // 自分と同じ球団の選手はいない（チームの名簿と食い違わないように）。名簿にいる選手は名簿の側から選ばれる
+    const onRoster = (x) => !!(s.roster && s.roster.teamId === s.player.teamId && s.roster.players.some((m) => m.name === x.name));
+    for (const x of J.pool) if (!x.mlb && x.team === s.player.teamId && !onRoster(x)) x.team = otherNpbTeam(s);
     J.poolYear = s.year;
   };
 
@@ -238,8 +240,9 @@
     for (const g of guests) plan[groupOf(g.pos)]--;
     const score = (x) => x.rating + G.gauss(0, 2) + (type === 'series' ? (x.age <= 27 ? 4 : 0) - (x.age >= 31 ? 8 : 0) : 0);
     const ids = [];
+    const rosterNames = new Set(s.roster && s.roster.teamId === p.teamId ? s.roster.players.map((m) => m.name) : []);
     for (const grp of POS_GROUPS) {
-      let cands = J.pool.filter((x) => grp.pos.includes(x.pos) && !(type === 'series' && x.mlb));
+      let cands = J.pool.filter((x) => grp.pos.includes(x.pos) && !(type === 'series' && x.mlb) && !rosterNames.has(x.name) && !guests.some((g) => g.name === x.name));
       cands = cands.map((x) => ({ x, sc: score(x) })).sort((a, b) => b.sc - a.sc).map((o) => o.x);
       let pick = [];
       if (grp.id === 'P') {

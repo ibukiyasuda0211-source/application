@@ -40,6 +40,11 @@
     { id: 'n_usa', name: 'アメリカ代表', short: 'USA', color: '#22356b', league: 'intl' },
   ];
   G.intlTeamByName = (short) => G.INTL_TEAMS.find((t) => t.short === short || t.name.replace(/代表$/, '') === short);
+  // 監督の呼び方（球団に監督の名前があれば「〇〇監督」）
+  G.mgrLabel = (s) => {
+    const t = G.teamById(s.player.teamId);
+    return t && t.manager ? `${t.manager.split(' ')[0]}監督` : '監督';
+  };
   G.teamById = (id) => G.TEAMS.find((t) => t.id === id) || G.INTL_TEAMS.find((t) => t.id === id);
 
   G.SURNAMES = [
